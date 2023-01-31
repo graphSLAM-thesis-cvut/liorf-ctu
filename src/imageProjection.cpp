@@ -223,6 +223,7 @@ public:
             pcl::moveFromROSMsg(currentCloudMsg, *tmpOusterCloudIn);
             laserCloudIn->points.resize(tmpOusterCloudIn->size());
             laserCloudIn->is_dense = tmpOusterCloudIn->is_dense;
+            laserCloudIn->width = tmpOusterCloudIn->width;
             for (size_t i = 0; i < tmpOusterCloudIn->size(); i++)
             {
                 auto &src = tmpOusterCloudIn->points[i];
@@ -304,8 +305,8 @@ public:
             }
             if (ringFlag == -1)
             {
-                ROS_ERROR("Point cloud ring channel not available, please configure your point cloud data!");
-                ros::shutdown();
+                // ROS_ERROR("Point cloud ring channel not available, please configure your point cloud data!");
+                // ros::shutdown();
             }
         }
 
@@ -568,6 +569,7 @@ public:
     void projectPointCloud()
     {
         int cloudSize = laserCloudIn->points.size();
+        int width = laserCloudIn->width;
         // range image projection
         for (int i = 0; i < cloudSize; ++i)
         {
@@ -581,7 +583,7 @@ public:
             if (range < lidarMinRange || range > lidarMaxRange)
                 continue;
 
-            int rowIdn = laserCloudIn->points[i].ring;
+            int rowIdn = i/width;
             if (rowIdn < 0 || rowIdn >= N_SCAN)
                 continue;
 
