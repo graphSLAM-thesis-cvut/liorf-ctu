@@ -1,4 +1,9 @@
-# New Feature
+# New feature
+- Accept pointcloud without "ring" field. A ring (row) is calculated from the order of the point, matricies shape
+- Add wheeled odometry factor. Not that good for now, work on syncronyzation is needed;
+
+# liorf
+## New Feature
 ------------------- Update Date: 2022-11-20 -------------------
 - This version has removed the feature extraction module, making it easier to adapt to different lidars;
   
