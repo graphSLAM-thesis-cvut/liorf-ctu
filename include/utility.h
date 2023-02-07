@@ -116,10 +116,14 @@ public:
     vector<double> extRotV;
     vector<double> extRPYV;
     vector<double> extTransV;
+    vector<double> odometerTransV;
+    vector<double> odometerRotV;
     Eigen::Matrix3d extRot;
     Eigen::Matrix3d extRPY;
     Eigen::Vector3d extTrans;
     Eigen::Quaterniond extQRPY;
+    Eigen::Vector3d odometerTrans;
+    Eigen::Quaterniond odometerRot;
 
     // voxel filter paprams
     float mappingSurfLeafSize ;
@@ -223,6 +227,12 @@ public:
         extRPY = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRPYV.data(), 3, 3);
         extTrans = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extTransV.data(), 3, 1);
         extQRPY = Eigen::Quaterniond(extRPY).inverse();
+
+
+        nh.param<vector<double>>("liorf/odometerTrans", odometerTransV, vector<double>());
+        nh.param<vector<double>>("liorf/odometerRot", odometerRotV, vector<double>());
+        odometerTrans = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(odometerTransV.data(), 3, 1);
+        odometerRot = Eigen::Quaterniond(odometerRotV.data());
 
         nh.param<float>("liorf/mappingSurfLeafSize", mappingSurfLeafSize, 0.2);
         nh.param<float>("liorf/surroundingKeyframeMapLeafSize", surroundingKeyframeMapLeafSize, 0.2);

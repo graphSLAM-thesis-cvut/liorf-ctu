@@ -144,6 +144,9 @@ public:
     Eigen::Affine3f incrementalOdometryAffineFront;
     Eigen::Affine3f incrementalOdometryAffineBack;
 
+
+    gtsam::Pose3 odometer2Lidar;
+
     gtsam::Pose3 lastWheelOdometry;
     gtsam::Pose3 lastSavedWheelOdometry;
 
@@ -170,7 +173,7 @@ public:
         subCloud = nh.subscribe<liorf::cloud_info>("liorf/deskew/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
         subGPS = nh.subscribe<sensor_msgs::NavSatFix>(gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
         subLoop = nh.subscribe<std_msgs::Float64MultiArray>("lio_loop/loop_closure_detection", 1, &mapOptimization::loopInfoHandler, this, ros::TransportHints().tcpNoDelay());
-        subWheelOdom = nh.subscribe<nav_msgs::Odometry>("/odom_wheels", 1, &mapOptimization::wheelOdomHandler, this, ros::TransportHints().tcpNoDelay());
+        subWheelOdom = nh.subscribe<nav_msgs::Odometry>("/odom_in", 1, &mapOptimization::wheelOdomHandler, this, ros::TransportHints().tcpNoDelay());
 
         srvSaveMap = nh.advertiseService("liorf/save_map", &mapOptimization::saveMapService, this);
 
@@ -189,6 +192,9 @@ public:
         downSizeFilterLocalMapSurf.setLeafSize(surroundingKeyframeMapLeafSize, surroundingKeyframeMapLeafSize, surroundingKeyframeMapLeafSize);
         downSizeFilterICP.setLeafSize(loopClosureICPSurfLeafSize, loopClosureICPSurfLeafSize, loopClosureICPSurfLeafSize);
         downSizeFilterSurroundingKeyPoses.setLeafSize(surroundingKeyframeDensity, surroundingKeyframeDensity, surroundingKeyframeDensity); // for surrounding key poses of scan-to-map optimization
+        auto odometer2LidarRot = gtsam::Rot3(odometerRot);
+        auto odometer2LidarTrans = gtsam::Point3(odometerTrans);
+        odometer2Lidar = gtsam::Pose3(odometer2LidarRot, odometer2LidarTrans);
 
         allocateMemory();
     }
@@ -1319,13 +1325,12 @@ public:
         if (insertedWheelOdom)
         {
             noiseModel::Diagonal::shared_ptr odometryWheelNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
-            gtsam::Pose3 poseFrom = lastSavedWheelOdometry;
-            gtsam::Pose3 poseTo = lastWheelOdometry;
+            gtsam::Pose3 poseFrom = lastSavedWheelOdometry.compose(odometer2Lidar);
+            gtsam::Pose3 poseTo = lastWheelOdometry.compose(odometer2Lidar);
             gtsam::Pose3 poseBetween = poseFrom.between(poseTo);
             gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryWheelNoise));
 
             std::cout << "Wheel between: " << poseBetween.translation() << std::endl;
-
             std::cout << "Wheel before: " << poseFrom.translation() << std::endl;
             std::cout << "Wheel after: " << poseTo.translation() << std::endl;
         } else {
