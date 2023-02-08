@@ -79,7 +79,7 @@ public:
     ros::Subscriber subCloud;
     ros::Subscriber subGPS;
     ros::Subscriber subLoop;
-    ros::Subscriber subWheelOdom;
+    ros::Subscriber subExternalOdom;
 
     ros::ServiceServer srvSaveMap;
 
@@ -147,13 +147,13 @@ public:
 
     gtsam::Pose3 odometer2Lidar;
 
-    gtsam::Pose3 lastWheelOdometry;
-    gtsam::Pose3 lastSavedWheelOdometry;
+    gtsam::Pose3 lastExternalOdometry;
+    gtsam::Pose3 lastSavedExternalOdometry;
 
-    // gtsam::Pose3 wheel2lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
-    // gtsam::Pose3 lidar2wheel = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
-    bool insertedWheelOdom = false;
-    bool gotWheelOdom = false;
+    // gtsam::Pose3 External2lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
+    // gtsam::Pose3 lidar2External = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
+    bool insertedExternalOdom = false;
+    bool gotExternalOdom = false;
 
     GeographicLib::LocalCartesian gps_trans_;
 
@@ -173,7 +173,7 @@ public:
         subCloud = nh.subscribe<liorf::cloud_info>("liorf/deskew/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
         subGPS = nh.subscribe<sensor_msgs::NavSatFix>(gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
         subLoop = nh.subscribe<std_msgs::Float64MultiArray>("lio_loop/loop_closure_detection", 1, &mapOptimization::loopInfoHandler, this, ros::TransportHints().tcpNoDelay());
-        subWheelOdom = nh.subscribe<nav_msgs::Odometry>("/odom_in", 1, &mapOptimization::wheelOdomHandler, this, ros::TransportHints().tcpNoDelay());
+        subExternalOdom = nh.subscribe<nav_msgs::Odometry>("/odom_in", 1, &mapOptimization::ExternalOdomHandler, this, ros::TransportHints().tcpNoDelay());
 
         srvSaveMap = nh.advertiseService("liorf/save_map", &mapOptimization::saveMapService, this);
 
@@ -497,11 +497,11 @@ public:
         publishCloud(pubLaserCloudSurround, globalMapKeyFramesDS, timeLaserInfoStamp, odometryFrame);
     }
 
-    void wheelOdomHandler(const nav_msgs::Odometry::ConstPtr &odomMsg)
+    void ExternalOdomHandler(const nav_msgs::Odometry::ConstPtr &odomMsg)
     {
-        if (!gotWheelOdom){
-            gotWheelOdom = true;
-            ROS_INFO("Got first wheel odometry");
+        if (!gotExternalOdom){
+            gotExternalOdom = true;
+            ROS_INFO("Got first External odometry");
         }
         auto &curPose = odomMsg->pose.pose;
         float p_x = curPose.position.x;
@@ -511,7 +511,7 @@ public:
         float r_y = curPose.orientation.y;
         float r_z = curPose.orientation.z;
         float r_w = curPose.orientation.w;
-        lastWheelOdometry = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z), gtsam::Point3(p_x, p_y, p_z));
+        lastExternalOdometry = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z), gtsam::Point3(p_x, p_y, p_z));
     }
 
     void loopClosureThread()
@@ -1314,30 +1314,30 @@ public:
             gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseFrom.between(poseTo), odometryNoise));
             initialEstimate.insert(cloudKeyPoses3D->size(), poseTo);
             std::cout << "laserBetween: " << poseFrom.between(poseTo).translation() << std::endl;
-            if (gotWheelOdom){
-                addOdomWheelFactor();
+            if (gotExternalOdom){
+                addOdomExternalFactor();
             }
         }
     }
 
-    void addOdomWheelFactor()
+    void addOdomExternalFactor()
     {
-        if (insertedWheelOdom)
+        if (insertedExternalOdom)
         {
-            noiseModel::Diagonal::shared_ptr odometryWheelNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
-            gtsam::Pose3 poseFrom = lastSavedWheelOdometry.compose(odometer2Lidar);
-            gtsam::Pose3 poseTo = lastWheelOdometry.compose(odometer2Lidar);
+            noiseModel::Diagonal::shared_ptr odometryExternalNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
+            gtsam::Pose3 poseFrom = lastSavedExternalOdometry.compose(odometer2Lidar);
+            gtsam::Pose3 poseTo = lastExternalOdometry.compose(odometer2Lidar);
             gtsam::Pose3 poseBetween = poseFrom.between(poseTo);
-            gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryWheelNoise));
+            gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryExternalNoise));
 
-            std::cout << "Wheel between: " << poseBetween.translation() << std::endl;
-            std::cout << "Wheel before: " << poseFrom.translation() << std::endl;
-            std::cout << "Wheel after: " << poseTo.translation() << std::endl;
+            std::cout << "External between: " << poseBetween.translation() << std::endl;
+            std::cout << "External before: " << poseFrom.translation() << std::endl;
+            std::cout << "External after: " << poseTo.translation() << std::endl;
         } else {
-            insertedWheelOdom = true;
-            ROS_INFO("Initialized first Wheel Odometry Node");
+            insertedExternalOdom = true;
+            ROS_INFO("Initialized first External Odometry Node");
         }
-        lastSavedWheelOdometry = lastWheelOdometry;
+        lastSavedExternalOdometry = lastExternalOdometry;
     }
 
     void addGPSFactor()
