@@ -16,6 +16,11 @@
 #include <gtsam/nonlinear/Values.h>
 #include <gtsam/inference/Symbol.h>
 
+#include <message_filters/subscriber.h>
+#include <message_filters/cache.h>
+// #include <message_filters/time_synchronizer.h>
+// #include <message_filters/sync_policies/approximate_time.h>
+
 #include <gtsam/nonlinear/ISAM2.h>
 
 #include <GeographicLib/Geocentric.hpp>
@@ -80,6 +85,7 @@ public:
     ros::Subscriber subGPS;
     ros::Subscriber subLoop;
     ros::Subscriber subExternalOdom;
+    message_filters::Cache<nav_msgs::Odometry>* cacheExternalOdom;
 
     ros::ServiceServer srvSaveMap;
 
@@ -173,7 +179,9 @@ public:
         subCloud = nh.subscribe<liorf::cloud_info>("liorf/deskew/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
         subGPS = nh.subscribe<sensor_msgs::NavSatFix>(gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
         subLoop = nh.subscribe<std_msgs::Float64MultiArray>("lio_loop/loop_closure_detection", 1, &mapOptimization::loopInfoHandler, this, ros::TransportHints().tcpNoDelay());
-        subExternalOdom = nh.subscribe<nav_msgs::Odometry>("/odom_in", 1, &mapOptimization::ExternalOdomHandler, this, ros::TransportHints().tcpNoDelay());
+        subExternalOdom = nh.subscribe<nav_msgs::Odometry>("/odom_in", 10, &mapOptimization::ExternalOdomHandler, this, ros::TransportHints().tcpNoDelay());
+        // subExternalOdom = new message_filters::Subscriber<nav_msgs::Odometry>(nh, "external_odom", 10);
+        cacheExternalOdom = new message_filters::Cache<nav_msgs::Odometry>(100);
 
         srvSaveMap = nh.advertiseService("liorf/save_map", &mapOptimization::saveMapService, this);
 
@@ -257,6 +265,10 @@ public:
         {
             timeLastProcessing = timeLaserInfoCur;
 
+            auto lastExternalOdometryMsg = cacheExternalOdom->getElemBeforeTime(timeLaserInfoStamp);
+
+            SyncExternalOdomHandler(lastExternalOdometryMsg);
+
             updateInitialGuess();
 
             extractSurroundingKeyFrames();
@@ -272,6 +284,7 @@ public:
             publishOdometry();
 
             publishFrames();
+
         }
     }
 
@@ -497,7 +510,26 @@ public:
         publishCloud(pubLaserCloudSurround, globalMapKeyFramesDS, timeLaserInfoStamp, odometryFrame);
     }
 
-    void ExternalOdomHandler(const nav_msgs::Odometry::ConstPtr &odomMsg)
+    void ExternalOdomHandler(const nav_msgs::OdometryConstPtr &odomMsg)
+    {
+        // if (!gotExternalOdom){
+        //     gotExternalOdom = true;
+        //     ROS_INFO("Got first External odometry");
+        // }
+        // auto &curPose = odomMsg->pose.pose;
+        // float p_x = curPose.position.x;
+        // float p_y = curPose.position.y;
+        // float p_z = curPose.position.z;
+        // float r_x = curPose.orientation.x;
+        // float r_y = curPose.orientation.y;
+        // float r_z = curPose.orientation.z;
+        // float r_w = curPose.orientation.w;
+        // lastExternalOdometry = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z), gtsam::Point3(p_x, p_y, p_z));
+        cacheExternalOdom->add(odomMsg);
+
+    }
+
+    void SyncExternalOdomHandler(const nav_msgs::OdometryConstPtr &odomMsg)
     {
         if (!gotExternalOdom){
             gotExternalOdom = true;
@@ -512,6 +544,8 @@ public:
         float r_z = curPose.orientation.z;
         float r_w = curPose.orientation.w;
         lastExternalOdometry = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z), gtsam::Point3(p_x, p_y, p_z));
+        // cacheExternalOdom->add(odomMsg);
+
     }
 
     void loopClosureThread()
@@ -1311,16 +1345,19 @@ public:
             noiseModel::Diagonal::shared_ptr odometryNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
             gtsam::Pose3 poseFrom = pclPointTogtsamPose3(cloudKeyPoses6D->points.back());
             gtsam::Pose3 poseTo = trans2gtsamPose(transformTobeMapped);
-            gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseFrom.between(poseTo), odometryNoise));
-            initialEstimate.insert(cloudKeyPoses3D->size(), poseTo);
-            std::cout << "laserBetween: " << poseFrom.between(poseTo).translation() << std::endl;
+            gtsam::Pose3 poseBetween = poseFrom.between(poseTo);
+            if (! insertedExternalOdom ){
+                gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryNoise));
+                initialEstimate.insert(cloudKeyPoses3D->size(), poseTo);
+            }
+            std::cout << "laserBetween: " << poseBetween.translation() << ", rotation: " << poseBetween.rotation().quaternion() << std::endl;
             if (gotExternalOdom){
-                addOdomExternalFactor();
+                addOdomExternalFactor(poseTo);
             }
         }
     }
 
-    void addOdomExternalFactor()
+    void addOdomExternalFactor(gtsam::Pose3& poseToFirst)
     {
         if (insertedExternalOdom)
         {
@@ -1329,10 +1366,11 @@ public:
             gtsam::Pose3 poseTo = lastExternalOdometry.compose(odometer2Lidar);
             gtsam::Pose3 poseBetween = poseFrom.between(poseTo);
             gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryExternalNoise));
+            initialEstimate.insert(cloudKeyPoses3D->size(), poseToFirst);
 
-            std::cout << "External between: " << poseBetween.translation() << std::endl;
-            std::cout << "External before: " << poseFrom.translation() << std::endl;
-            std::cout << "External after: " << poseTo.translation() << std::endl;
+            std::cout << "External between: " << poseBetween.translation() << " " << poseBetween.rotation().quaternion() << std::endl;
+            // std::cout << "External before: " << poseFrom.translation() << std::endl;
+            // std::cout << "External after: " << poseTo.translation() << std::endl;
         } else {
             insertedExternalOdom = true;
             ROS_INFO("Initialized first External Odometry Node");
