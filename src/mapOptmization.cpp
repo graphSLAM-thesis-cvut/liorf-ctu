@@ -531,6 +531,10 @@ public:
 
     void SyncExternalOdomHandler(const nav_msgs::OdometryConstPtr &odomMsg)
     {
+        if(!odomMsg){
+            ROS_ERROR_THROTTLE(5, "Could not find correspoinding external odometry for the current laser odometry. Not using external odometry");
+            return;
+        }
         if (!gotExternalOdom){
             gotExternalOdom = true;
             ROS_INFO("Got first External odometry");
@@ -1346,10 +1350,8 @@ public:
             gtsam::Pose3 poseFrom = pclPointTogtsamPose3(cloudKeyPoses6D->points.back());
             gtsam::Pose3 poseTo = trans2gtsamPose(transformTobeMapped);
             gtsam::Pose3 poseBetween = poseFrom.between(poseTo);
-            if (! insertedExternalOdom ){
-                gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryNoise));
-                initialEstimate.insert(cloudKeyPoses3D->size(), poseTo);
-            }
+            gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryNoise));
+            initialEstimate.insert(cloudKeyPoses3D->size(), poseTo);
             std::cout << "laserBetween: " << poseBetween.translation() << ", rotation: " << poseBetween.rotation().quaternion() << std::endl;
             if (gotExternalOdom){
                 addOdomExternalFactor(poseTo);
@@ -1366,11 +1368,9 @@ public:
             gtsam::Pose3 poseTo = lastExternalOdometry.compose(odometer2Lidar);
             gtsam::Pose3 poseBetween = poseFrom.between(poseTo);
             gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryExternalNoise));
-            initialEstimate.insert(cloudKeyPoses3D->size(), poseToFirst);
 
             std::cout << "External between: " << poseBetween.translation() << " " << poseBetween.rotation().quaternion() << std::endl;
-            // std::cout << "External before: " << poseFrom.translation() << std::endl;
-            // std::cout << "External after: " << poseTo.translation() << std::endl;
+
         } else {
             insertedExternalOdom = true;
             ROS_INFO("Initialized first External Odometry Node");
