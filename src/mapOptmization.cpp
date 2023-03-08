@@ -26,6 +26,7 @@
 #include <GeographicLib/Geocentric.hpp>
 #include <GeographicLib/LocalCartesian.hpp>
 #include <eigen_conversions/eigen_msg.h>
+#include <algorithm>
 
 using namespace gtsam;
 
@@ -123,6 +124,8 @@ public:
     pcl::VoxelGrid<PointType> downSizeFilterICP;
     pcl::VoxelGrid<PointType> downSizeFilterSurroundingKeyPoses; // for surrounding key poses of scan-to-map optimization
 
+    Eigen::Affine3f transIncre;
+
     ros::Time timeLaserInfoStamp;
     double timeLaserInfoCur;
 
@@ -154,12 +157,15 @@ public:
     gtsam::Pose3 odometer2Lidar;
 
     gtsam::Pose3 lastExternalOdometry;
+    gtsam::Pose3 externalOdometryIncrement;
+
     gtsam::Pose3 lastSavedExternalOdometry;
 
     // gtsam::Pose3 External2lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
     // gtsam::Pose3 lidar2External = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
     bool insertedExternalOdom = false;
     bool gotExternalOdom = false;
+    bool gotExternalOdomIncrement = false;
 
     GeographicLib::LocalCartesian gps_trans_;
 
@@ -512,21 +518,7 @@ public:
 
     void ExternalOdomHandler(const nav_msgs::OdometryConstPtr &odomMsg)
     {
-        // if (!gotExternalOdom){
-        //     gotExternalOdom = true;
-        //     ROS_INFO("Got first External odometry");
-        // }
-        // auto &curPose = odomMsg->pose.pose;
-        // float p_x = curPose.position.x;
-        // float p_y = curPose.position.y;
-        // float p_z = curPose.position.z;
-        // float r_x = curPose.orientation.x;
-        // float r_y = curPose.orientation.y;
-        // float r_z = curPose.orientation.z;
-        // float r_w = curPose.orientation.w;
-        // lastExternalOdometry = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z), gtsam::Point3(p_x, p_y, p_z));
         cacheExternalOdom->add(odomMsg);
-
     }
 
     void SyncExternalOdomHandler(const nav_msgs::OdometryConstPtr &odomMsg)
@@ -535,10 +527,7 @@ public:
             ROS_ERROR_THROTTLE(5, "Could not find correspoinding external odometry for the current laser odometry. Not using external odometry");
             return;
         }
-        if (!gotExternalOdom){
-            gotExternalOdom = true;
-            ROS_INFO("Got first External odometry");
-        }
+        
         auto &curPose = odomMsg->pose.pose;
         float p_x = curPose.position.x;
         float p_y = curPose.position.y;
@@ -547,8 +536,20 @@ public:
         float r_y = curPose.orientation.y;
         float r_z = curPose.orientation.z;
         float r_w = curPose.orientation.w;
-        lastExternalOdometry = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z), gtsam::Point3(p_x, p_y, p_z));
-        // cacheExternalOdom->add(odomMsg);
+        gtsam::Pose3 currentExternalOdometry = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z), gtsam::Point3(p_x, p_y, p_z));
+
+        if(!gotExternalOdomIncrement){
+            gotExternalOdomIncrement = true;
+            ROS_INFO("Got first External Odometry Increment");
+        } else {
+            externalOdometryIncrement = lastExternalOdometry.compose(odometer2Lidar).between(currentExternalOdometry.compose(odometer2Lidar));
+        }
+
+        lastExternalOdometry = currentExternalOdometry;
+        if (!gotExternalOdom){
+            gotExternalOdom = true;
+            ROS_INFO("Got first External odometry");
+        }
 
     }
 
@@ -832,6 +833,8 @@ public:
 
     void updateInitialGuess()
     {
+
+        std::cout << "updating initial guess" << std::endl;
         // save current transformation before any processing
         incrementalOdometryAffineFront = trans2Affine3f(transformTobeMapped);
 
@@ -864,7 +867,7 @@ public:
             }
             else
             {
-                Eigen::Affine3f transIncre = lastImuPreTransformation.inverse() * transBack;
+                transIncre = lastImuPreTransformation.inverse() * transBack;
                 Eigen::Affine3f transTobe = trans2Affine3f(transformTobeMapped);
                 Eigen::Affine3f transFinal = transTobe * transIncre;
                 pcl::getTranslationAndEulerAngles(transFinal, transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5],
@@ -881,7 +884,7 @@ public:
         if (cloudInfo.imuAvailable == true && imuType)
         {
             Eigen::Affine3f transBack = pcl::getTransformation(0, 0, 0, cloudInfo.imuRollInit, cloudInfo.imuPitchInit, cloudInfo.imuYawInit);
-            Eigen::Affine3f transIncre = lastImuTransformation.inverse() * transBack;
+            transIncre = lastImuTransformation.inverse() * transBack;
 
             Eigen::Affine3f transTobe = trans2Affine3f(transformTobeMapped);
             Eigen::Affine3f transFinal = transTobe * transIncre;
@@ -1252,6 +1255,7 @@ public:
         {
             kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
 
+            // perform ICP
             for (int iterCount = 0; iterCount < 30; iterCount++)
             {
                 laserCloudOri->clear();
@@ -1261,9 +1265,56 @@ public:
 
                 combineOptimizationCoeffs();
 
-                if (LMOptimization(iterCount) == true)
+                if (LMOptimization(iterCount) == true){
                     break;
+                }
             }
+            //////////////////////////////////// Choose (For now in a hardcode way) and odometry source
+            
+            Eigen::Affine3f transOrig = incrementalOdometryAffineFront;
+
+
+            // IMU increment
+            Eigen::Affine3f IMUincrement = transIncre;
+            
+            // External Increment
+            Eigen::Matrix3f rotExternal = externalOdometryIncrement.rotation().matrix().cast<float>(); // Extract rotation matrix and cast to float
+            Eigen::Vector3f transExternal = externalOdometryIncrement.translation().cast<float>(); // Extract translation vector and cast to float
+            Eigen::Affine3f externalIncrement = Eigen::Affine3f::Identity(); // Initialize transformation matrix to identity
+            externalIncrement.linear() = rotExternal; // Set rotation matrix
+            externalIncrement.translation() = transExternal; // Set translation vector
+            
+            // ICP Increment
+            Eigen::Affine3f ICPresult = Eigen::Translation3f(transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5]) *
+                                            Eigen::AngleAxisf(transformTobeMapped[2], Eigen::Vector3f::UnitZ()) *
+                                            Eigen::AngleAxisf(transformTobeMapped[1], Eigen::Vector3f::UnitY()) *
+                                            Eigen::AngleAxisf(transformTobeMapped[0], Eigen::Vector3f::UnitX());
+            Eigen::Affine3f ICPincrement =  transOrig.inverse() * ICPresult;
+
+
+            Eigen::Quaternionf quatICP(ICPincrement.linear());
+            Eigen::Vector3f dxyzICP = ICPincrement.translation();
+            std::cout << std::fixed;
+            std::cout << std::setprecision(4);
+            std::cout << "ICP     : t: " << dxyzICP(0) << " " << dxyzICP(1) << " " << dxyzICP(2) << " q: " << quatICP.w() << " " << quatICP.x() << " " << quatICP.y() << " " << quatICP.z() << " " << std::endl;
+            Eigen::Quaternionf quatIMU(IMUincrement.linear());
+            Eigen::Vector3f dxyzIMU = IMUincrement.translation();
+            std::cout << "IMU     : t: " << dxyzIMU(0) << " " << dxyzIMU(1) << " " << dxyzIMU(2) << " q: " << quatIMU.w() << " " << quatIMU.x() << " " << quatIMU.y() << " " << quatIMU.z() << " " << std::endl;
+            Eigen::Quaternionf quatExternal(externalIncrement.linear());
+            Eigen::Vector3f dxyzExternal = externalIncrement.translation();
+            std::cout << "External: t: " << dxyzExternal(0) << " " << dxyzExternal(1) << " " << dxyzExternal(2) << " q: " << quatExternal.w() << " " << quatExternal.x() << " " << quatExternal.y() << " " << quatExternal.z() << " " << std::endl;
+
+            
+            Eigen::Affine3f lastPose = transOrig * externalIncrement;
+
+            //////////////////////////////////// Choose (For now in a hardcode way) and odometry source. END
+
+            Eigen::Vector3f rpyLast = lastPose.rotation().eulerAngles(0, 1, 2);
+            Eigen::Vector3f xyzLast = lastPose.translation();
+            Eigen::VectorXf rpyxyzLast(6);
+            rpyxyzLast << rpyLast, xyzLast;
+            
+            std::copy(rpyxyzLast.data(), rpyxyzLast.data() + rpyxyzLast.size(), std::begin(transformTobeMapped));
 
             transformUpdate();
         }
@@ -1350,12 +1401,15 @@ public:
             gtsam::Pose3 poseFrom = pclPointTogtsamPose3(cloudKeyPoses6D->points.back());
             gtsam::Pose3 poseTo = trans2gtsamPose(transformTobeMapped);
             gtsam::Pose3 poseBetween = poseFrom.between(poseTo);
-            gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryNoise));
-            initialEstimate.insert(cloudKeyPoses3D->size(), poseTo);
-            std::cout << "laserBetween: " << poseBetween.translation() << ", rotation: " << poseBetween.rotation().quaternion() << std::endl;
-            if (gotExternalOdom){
-                addOdomExternalFactor(poseTo);
-            }
+            // std::cout << "laserBetween: " << poseBetween.translation() << ", rotation: " << poseBetween.rotation().quaternion() << std::endl;
+            // if(!insertedExternalOdom){
+                gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryNoise));
+                initialEstimate.insert(cloudKeyPoses3D->size(), poseTo);
+            // }
+            // if (gotExternalOdom){
+            //     addOdomExternalFactor(poseTo);
+            // }
+           
         }
     }
 
@@ -1363,13 +1417,24 @@ public:
     {
         if (insertedExternalOdom)
         {
-            noiseModel::Diagonal::shared_ptr odometryExternalNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
-            gtsam::Pose3 poseFrom = lastSavedExternalOdometry.compose(odometer2Lidar);
-            gtsam::Pose3 poseTo = lastExternalOdometry.compose(odometer2Lidar);
+            gtsam::Pose3 poseFrom = pclPointTogtsamPose3(cloudKeyPoses6D->points.back());
+            gtsam::Pose3 poseTo = trans2gtsamPose(transformTobeMapped);
             gtsam::Pose3 poseBetween = poseFrom.between(poseTo);
-            gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetween, odometryExternalNoise));
 
-            std::cout << "External between: " << poseBetween.translation() << " " << poseBetween.rotation().quaternion() << std::endl;
+            noiseModel::Diagonal::shared_ptr odometryExternalNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
+            gtsam::Pose3 poseFromExt = lastSavedExternalOdometry.compose(odometer2Lidar);
+            gtsam::Pose3 poseToExt = lastExternalOdometry.compose(odometer2Lidar);
+            gtsam::Pose3 poseBetweenExt = poseFromExt.between(poseToExt);
+
+
+
+            gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseBetweenExt, odometryExternalNoise));
+
+            initialEstimate.insert(cloudKeyPoses3D->size(), poseToExt);
+
+            // std::cout << "External between: " << poseBetweenExt.translation() << " " << poseBetweenExt.rotation().quaternion() << std::endl;
+            std::cout << "Difference: " << poseBetweenExt.between(poseBetween).translation() << " " << poseBetweenExt.between(poseBetween).rotation().quaternion() << std::endl;
+            // std::cout << "Difference: " << poseBetweenExt.between(poseBetween).translation() << " " << poseBetweenExt.between(poseBetween).rotation().quaternion() << std::endl;
 
         } else {
             insertedExternalOdom = true;
@@ -1480,8 +1545,11 @@ public:
 
     void saveKeyFramesAndFactor()
     {
-        if (saveFrame() == false)
+        if (saveFrame() == false){
             return;
+        } else {
+            std::cout << "adding a factor!" << std::endl;
+        }
 
         // odom factor
         addOdomFactor();
