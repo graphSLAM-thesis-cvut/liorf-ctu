@@ -157,6 +157,9 @@ public:
     float globalMapVisualizationPoseDensity;
     float globalMapVisualizationLeafSize;
 
+    // robustness parameters
+    string defaultOdomSource; // "lidar" or "external"
+
     ParamServer()
     {
         nh.param<std::string>("/robot_id", robot_id, "roboat");
@@ -260,6 +263,8 @@ public:
         nh.param<float>("liorf/globalMapVisualizationSearchRadius", globalMapVisualizationSearchRadius, 1e3);
         nh.param<float>("liorf/globalMapVisualizationPoseDensity", globalMapVisualizationPoseDensity, 10.0);
         nh.param<float>("liorf/globalMapVisualizationLeafSize", globalMapVisualizationLeafSize, 1.0);
+
+        nh.param<std::string>("liorf/defaultOdomSource", defaultOdomSource, "lidar"); 
 
         usleep(100);
     }

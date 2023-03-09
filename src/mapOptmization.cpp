@@ -1246,6 +1246,12 @@ public:
         return false; // keep optimizing
     }
 
+    float F2dist(Eigen::Quaternionf& q1, Eigen::Quaternionf& q2){
+        float norm1 = (q1.coeffs() - q2.coeffs()).norm();
+        float norm2 = (q1.coeffs() + q2.coeffs()).norm();
+        return std::min(norm1, norm2);
+    }
+
     void scan2MapOptimization()
     {
         if (cloudKeyPoses3D->points.empty())
@@ -1304,8 +1310,32 @@ public:
             Eigen::Vector3f dxyzExternal = externalIncrement.translation();
             std::cout << "External: t: " << dxyzExternal(0) << " " << dxyzExternal(1) << " " << dxyzExternal(2) << " q: " << quatExternal.w() << " " << quatExternal.x() << " " << quatExternal.y() << " " << quatExternal.z() << " " << std::endl;
 
-            
-            Eigen::Affine3f lastPose = transOrig * externalIncrement;
+            Eigen::Affine3f lastPose = transOrig;
+
+            float distanceRotICP = F2dist(quatIMU, quatICP);
+            float distanceRotExternal = F2dist(quatIMU, quatExternal);
+            std::cout << "Rot difference ICP     : " << distanceRotICP << std::endl;
+            std::cout << "Rot difference External: " << distanceRotExternal << std::endl;
+            std::cout << "Trans difference ICP     : " << (dxyzICP - dxyzIMU).norm() << std::endl;
+            std::cout << "Trans difference External: " << (dxyzExternal - dxyzIMU).norm() << std::endl;
+
+            std::string odomSource = defaultOdomSource;
+            if ( (!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && distanceRotICP > 0.01 ){
+                odomSource = distanceRotICP < distanceRotExternal ? "lidar" : "external";
+            }
+
+            if (odomSource == "lidar"){
+                ROS_DEBUG("Using Lidar odometry");
+                std::cout << "Using Lidar odometry" << std::endl;
+                lastPose = lastPose * ICPincrement;
+            } else if (odomSource == "external"){
+                ROS_DEBUG("Using External odometry");
+                std::cout << "Using External odometry" << std::endl;
+                lastPose = lastPose * externalIncrement;
+            } else {
+                ROS_ERROR("Unknown odom source '%s' ('lidar' or 'external' required)", odomSource);
+            }
+             
 
             //////////////////////////////////// Choose (For now in a hardcode way) and odometry source. END
 
