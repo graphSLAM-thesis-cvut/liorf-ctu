@@ -28,12 +28,18 @@
 #include <eigen_conversions/eigen_msg.h>
 #include <algorithm>
 
+
+
+
 using namespace gtsam;
 
 using symbol_shorthand::B; // Bias  (ax,ay,az,gx,gy,gz)
 using symbol_shorthand::G; // GPS pose
 using symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
 using symbol_shorthand::X; // Pose3 (x,y,z,r,p,y)
+
+
+std::ofstream myfile;
 
 /*
  * A point cloud type that has 6D pose info ([x,y,z,roll,pitch,yaw] intensity is time stamp)
@@ -1319,15 +1325,29 @@ public:
             std::cout << "Trans difference ICP     : " << (dxyzICP - dxyzIMU).norm() << std::endl;
             std::cout << "Trans difference External: " << (dxyzExternal - dxyzIMU).norm() << std::endl;
 
+
+            static double startTime = 0;
+
+            myfile.open("errors.txt", std::ifstream::app);
+
+            double time = timeLaserInfoCur;
+
+            if (startTime == 0){
+                startTime = time;
+            }
+            time -= startTime;
+            myfile << time << " " << distanceRotICP << " " << (dxyzICP - dxyzIMU).norm() << " " << distanceRotExternal << " " << (dxyzExternal - dxyzIMU).norm()  << std::endl;
+            myfile.close();
+
             std::string odomSource = defaultOdomSource;
-            if ( (!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && distanceRotICP > 0.01 ){
+            if ( (!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ( distanceRotICP > 0.03 || (dxyzICP - dxyzIMU).norm() > 0.05 ) ){
                 odomSource = distanceRotICP < distanceRotExternal ? "lidar" : "external";
             }
 
             if (odomSource == "lidar"){
                 ROS_DEBUG("Using Lidar odometry");
                 std::cout << "Using Lidar odometry" << std::endl;
-                lastPose = lastPose * ICPincrement;
+                lastPose = lastPose * externalIncrement;//ICPincrement;
             } else if (odomSource == "external"){
                 ROS_DEBUG("Using External odometry");
                 std::cout << "Using External odometry" << std::endl;
@@ -1839,6 +1859,10 @@ public:
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "liorf");
+    
+    myfile.open("errors.txt", std::ifstream::out | std::ifstream::trunc);
+    myfile.close();
+
 
     mapOptimization MO;
 
