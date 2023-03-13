@@ -159,6 +159,7 @@ public:
 
     // robustness parameters
     string defaultOdomSource; // "lidar" or "external"
+    bool useBestOdom; // "lidar" or "external"
 
     ParamServer()
     {
@@ -265,6 +266,7 @@ public:
         nh.param<float>("liorf/globalMapVisualizationLeafSize", globalMapVisualizationLeafSize, 1.0);
 
         nh.param<std::string>("liorf/defaultOdomSource", defaultOdomSource, "lidar"); 
+        nh.param<bool>("liorf/useBestOdom", useBestOdom, false); 
 
         usleep(100);
     }

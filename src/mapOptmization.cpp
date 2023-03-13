@@ -1340,7 +1340,7 @@ public:
             myfile.close();
 
             std::string odomSource = defaultOdomSource;
-            if ( (!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ( distanceRotICP > 0.03 || (dxyzICP - dxyzIMU).norm() > 0.05 ) ){
+            if ( (!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ( distanceRotICP > 0.03 || (dxyzICP - dxyzIMU).norm() > 0.05 ) && useBestOdom){
                 odomSource = distanceRotICP < distanceRotExternal ? "lidar" : "external";
             }
 
