@@ -1298,9 +1298,9 @@ public:
             
             // ICP Increment
             Eigen::Affine3f ICPresult = Eigen::Translation3f(transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5]) *
-                                            Eigen::AngleAxisf(transformTobeMapped[2], Eigen::Vector3f::UnitZ()) *
+                                            Eigen::AngleAxisf(transformTobeMapped[0], Eigen::Vector3f::UnitX()) *
                                             Eigen::AngleAxisf(transformTobeMapped[1], Eigen::Vector3f::UnitY()) *
-                                            Eigen::AngleAxisf(transformTobeMapped[0], Eigen::Vector3f::UnitX());
+                                            Eigen::AngleAxisf(transformTobeMapped[2], Eigen::Vector3f::UnitZ());
             Eigen::Affine3f ICPincrement =  transOrig.inverse() * ICPresult;
 
 
@@ -1347,7 +1347,7 @@ public:
             if (odomSource == "lidar"){
                 ROS_DEBUG("Using Lidar odometry");
                 std::cout << "Using Lidar odometry" << std::endl;
-                lastPose = lastPose * externalIncrement;//ICPincrement;
+                lastPose = lastPose * ICPincrement;//ICPincrement;
             } else if (odomSource == "external"){
                 ROS_DEBUG("Using External odometry");
                 std::cout << "Using External odometry" << std::endl;
