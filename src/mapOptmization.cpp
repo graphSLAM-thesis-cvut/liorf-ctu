@@ -1349,14 +1349,26 @@ public:
             }
             time -= startTime;
             myfile << time << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal  << std::endl;
-            myfile.close();
 
             std::string odomSource = defaultOdomSource;
-            if ( (!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ( distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate) && useBestOdom){
-                odomSource = (distanceRotICP < distanceRotExternal && distanceTranslationICP < distanceTranslationExternal )  ? "lidar" : "external";
+            if ( (!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ( distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate) ){
+                std::cout << time << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal  << std::endl;
+                bool ICPbetterOR = (distanceRotICP/distanceRotExternal < 1.1) || (distanceTranslationICP/distanceTranslationExternal < 1.1 );
+                bool ICPnotWorse = (distanceRotICP/distanceRotExternal < 1.3) && (distanceTranslationICP/distanceTranslationExternal < 1.3 );
+                odomSource = (ICPbetterOR && ICPnotWorse)  ? "lidar" : "external";
+                myfile << time+0.00000001 << " " << 0.3 << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal  << std::endl;
+                std::cout << odomSource << std::endl;
+                if (odomSource == "external"){
+                    ROS_ERROR("external");
+                }
                 // bool lidarBetter = (distanceRotICP < distanceRotExternal) && (distanceTranslationICP < distanceTranslationExternal);
                 // odomSource = lidarBetter ? "lidar" : "external";
                 // odomSource = "external";
+            }
+
+            myfile.close();
+            if(!useBestOdom){
+                odomSource = defaultOdomSource;
             }
             // if(isDegenerate){
             //     odomSource = "external";

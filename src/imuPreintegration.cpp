@@ -273,6 +273,10 @@ public:
         // 0. initialize system
         if (systemInitialized == false)
         {
+            if(degenerate){
+                ROS_ERROR("Can't Initialize IMU with a degenerate odometry!");
+                return;
+            }
             resetOptimization();
 
             // pop old IMU message
@@ -319,10 +323,11 @@ public:
         // reset graph for speed
         if (key == 100)
         {
+            ROS_INFO("RESETTING IMU GRAPH");
             // get updated noise before reset
             gtsam::noiseModel::Gaussian::shared_ptr updatedPoseNoise = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(X(key-1)));
             gtsam::noiseModel::Gaussian::shared_ptr updatedVelNoise  = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(V(key-1)));
-            gtsam::noiseModel::Gaussian::shared_ptr updatedBiasNoise = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(B(key-1)));
+            gtsam::noiseModel::Gaussian::shared_ptr updatedBiasNoise = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(B(key-1))/5);
             // reset graph
             resetOptimization();
             // add pose

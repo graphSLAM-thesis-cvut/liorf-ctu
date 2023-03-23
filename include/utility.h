@@ -158,8 +158,11 @@ public:
     float globalMapVisualizationLeafSize;
 
     // robustness parameters
-    string defaultOdomSource; // "lidar" or "external"
-    bool useBestOdom; // "lidar" or "external"
+    std::string defaultOdomSource; // "lidar" or "external"
+    bool useBestOdom; // if to switch from the default odometry or not
+    float thRotationSwitch; // which roatational difference with IMU would be an indication to switch. possibl difference from 0 to sqrt(2)
+    float thTranslationSwitch; // which translational difference with IMU would be an indication to switch. possibl difference from 0 to sqrt(2)
+    
 
     ParamServer()
     {
@@ -267,6 +270,9 @@ public:
 
         nh.param<std::string>("liorf/defaultOdomSource", defaultOdomSource, "lidar"); 
         nh.param<bool>("liorf/useBestOdom", useBestOdom, false); 
+        nh.param<float>("liorf/thRotationSwitch", thRotationSwitch, 0.1); 
+        nh.param<float>("liorf/thTranslationSwitch", thTranslationSwitch, 0.05); 
+
 
         usleep(100);
     }
