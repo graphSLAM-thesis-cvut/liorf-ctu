@@ -321,7 +321,7 @@ public:
 
 
         // reset graph for speed
-        if (key == 100)
+        if ((key == maxIMUgraphLen))
         {
             ROS_INFO("RESETTING IMU GRAPH");
             // get updated noise before reset

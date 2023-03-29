@@ -162,6 +162,8 @@ public:
     bool useBestOdom; // if to switch from the default odometry or not
     float thRotationSwitch; // which roatational difference with IMU would be an indication to switch. possibl difference from 0 to sqrt(2)
     float thTranslationSwitch; // which translational difference with IMU would be an indication to switch. possibl difference from 0 to sqrt(2)
+    double rosbagStart; // 
+    int maxIMUgraphLen; // 
     
 
     ParamServer()
@@ -272,7 +274,8 @@ public:
         nh.param<bool>("liorf/useBestOdom", useBestOdom, false); 
         nh.param<float>("liorf/thRotationSwitch", thRotationSwitch, 0.1); 
         nh.param<float>("liorf/thTranslationSwitch", thTranslationSwitch, 0.05); 
-
+        nh.param<double>("liorf/rosbagStart", rosbagStart, double(1678964096.007040)); 
+        nh.param<int>("liorf/maxIMUgraphLen", maxIMUgraphLen, 100);
 
         usleep(100);
     }

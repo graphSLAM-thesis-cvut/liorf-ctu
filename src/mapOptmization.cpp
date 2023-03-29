@@ -1270,6 +1270,57 @@ public:
         return std::min(norm1, norm2);
     }
 
+    float approximateYaw(Eigen::Quaternionf &q){
+        // std::cout << "q: " << q.coeffs() << std::endl;
+        Eigen::Vector3f forward;
+        forward << 1, 0, 0;
+        Eigen::Vector3f forwardRotated = q.toRotationMatrix() * forward;
+        forwardRotated(2) = 0.0;
+        Eigen::Vector3f forwardProjected = forwardRotated.normalized();
+        // std::cout << "forward: " << forward << std::endl;
+        // std::cout << "forwardProjected: " << forwardProjected << std::endl;
+
+        float dot = forward.transpose()*forwardProjected;
+        // std::cout << "Dot: " << dot << std::endl;
+        float yaw = std::acos(dot);
+        return yaw;
+    }
+
+    float pi = 3.14159265358;
+
+    float wrapAngle(float angle){
+        float angleModified = angle + pi;
+        float wrappedModified = angleModified - std::floor(angleModified/(2*pi))*2*pi ;
+        float wrapped = wrappedModified - pi ;
+        return wrapped;
+    }
+
+    float yawDist(Eigen::Quaternionf &q1, Eigen::Quaternionf &q2)
+    {
+        float yaw1 = approximateYaw(q1);
+        float yaw2 = approximateYaw(q2);
+        std::cout << "1: " << yaw1 << " 2: " << yaw2 << std::endl;
+        float diffUnwraped = yaw1 - yaw2;
+        float diff=wrapAngle(diffUnwraped);
+
+        // std::cout << "diff: " << diff << std::endl;
+        return std::fabs(diff);
+    }
+
+    float quatToAngle(Eigen::Quaternionf &q){
+        Eigen::Quaternionf identity(1, 0, 0, 0);
+        return angleDist(identity, q);
+    }
+
+    float angleDist(Eigen::Quaternionf &q1, Eigen::Quaternionf &q2)
+    {
+        float angleDiff = std::fabs(q1.angularDistance(q2));
+        if (angleDiff > pi){
+            angleDiff = 2*pi - angleDiff;
+        }
+        return angleDiff;
+    }
+
     void scan2MapOptimization()
     {
         if (cloudKeyPoses3D->points.empty())
@@ -1320,18 +1371,18 @@ public:
             Eigen::Vector3f dxyzICP = ICPincrement.translation();
             std::cout << std::fixed;
             std::cout << std::setprecision(4);
-            // std::cout << "ICP     : t: " << dxyzICP(0) << " " << dxyzICP(1) << " " << dxyzICP(2) << " q: " << quatICP.w() << " " << quatICP.x() << " " << quatICP.y() << " " << quatICP.z() << " " << std::endl;
+            std::cout << "ICP     : t: " << dxyzICP(0) << " " << dxyzICP(1) << " " << dxyzICP(2) << " q: " << quatToAngle(quatICP) << std::endl;
             Eigen::Quaternionf quatIMU(IMUincrement.linear());
             Eigen::Vector3f dxyzIMU = IMUincrement.translation();
-            // std::cout << "IMU     : t: " << dxyzIMU(0) << " " << dxyzIMU(1) << " " << dxyzIMU(2) << " q: " << quatIMU.w() << " " << quatIMU.x() << " " << quatIMU.y() << " " << quatIMU.z() << " " << std::endl;
+            std::cout << "IMU     : t: " << dxyzIMU(0) << " " << dxyzIMU(1) << " " << dxyzIMU(2) << " q: " << quatToAngle(quatIMU) << std::endl;
             Eigen::Quaternionf quatExternal(externalIncrement.linear());
             Eigen::Vector3f dxyzExternal = externalIncrement.translation();
-            // std::cout << "External: t: " << dxyzExternal(0) << " " << dxyzExternal(1) << " " << dxyzExternal(2) << " q: " << quatExternal.w() << " " << quatExternal.x() << " " << quatExternal.y() << " " << quatExternal.z() << " " << std::endl;
+            std::cout << "External: t: " << dxyzExternal(0) << " " << dxyzExternal(1) << " " << dxyzExternal(2) << " q: " << quatToAngle(quatExternal) << " " << std::endl;
 
             Eigen::Affine3f lastPose = transOrig;
 
-            float distanceRotICP = F2dist(quatIMU, quatICP);
-            float distanceRotExternal = F2dist(quatIMU, quatExternal);
+            float distanceRotICP = angleDist(quatIMU, quatICP);
+            float distanceRotExternal = angleDist(quatIMU, quatExternal);
             float distanceTranslationICP = (dxyzICP - dxyzIMU).norm();
             float distanceTranslationExternal = (dxyzExternal - dxyzIMU).norm();
             // std::cout << "Rot difference ICP     : " << distanceRotICP << std::endl;
@@ -1350,26 +1401,45 @@ public:
                 startTime = time;
             }
             time -= startTime;
-            myfile << time << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
+            myfile << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
 
             std::string odomSource = defaultOdomSource;
-            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
+            // if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
+            // {
+            //     bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
+            //     bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
+            //     odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
+            //     // myfile << time + 0.00000001 << " " << 0.3 << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
+            //     std::cout << odomSource << std::endl;
+            //     if (odomSource == "external")
+            //     {
+            //         ROS_ERROR("external");
+            //     }
+            //     // bool lidarBetter = (distanceRotICP < distanceRotExternal) && (distanceTranslationICP < distanceTranslationExternal);
+            //     // odomSource = lidarBetter ? "lidar" : "external";
+            //     // odomSource = "external";
+            // }
+            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ((distanceRotICP > thRotationSwitch))  )
             {
-                std::cout << time << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
-                bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
-                bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
-                odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
-                // myfile << time + 0.00000001 << " " << 0.3 << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
-                std::cout << odomSource << std::endl;
-                if (odomSource == "external")
-                {
-                    ROS_ERROR("external");
-                }
-                // bool lidarBetter = (distanceRotICP < distanceRotExternal) && (distanceTranslationICP < distanceTranslationExternal);
-                // odomSource = lidarBetter ? "lidar" : "external";
-                // odomSource = "external";
+                bool externalRotBetter = (distanceRotExternal/distanceRotICP < 0.9) && distanceRotExternal < thRotationSwitch;
+                // bool externalTransAdequate = distanceTranslationExternal/distanceTranslationICP < 1.6;
+                odomSource = (externalRotBetter ) ? "external" : "lidar";
             }
+            // if ((!std::isnan(distanceTranslationICP)) && (!std::isnan(distanceTranslationExternal)) && ((distanceTranslationICP > thTranslationSwitch)) && odomSource == "lidar")
+            // {
+            //     bool externalTrBetter = distanceTranslationExternal/distanceTranslationICP < 0.9;
+            //     bool externalRotAdequate = distanceRotExternal/distanceRotICP < 1.2;
+            //     odomSource = distanceTranslationExternal < thTranslationSwitch ? "external" : "lidar";   
+            // }
+            // if(isDegenerate && odomSource == "lidar"){
+                
+            std::cout << time + startTime - rosbagStart << "diff: ICP(r,t): " << distanceRotICP << " " << distanceTranslationICP << " EXT(r,t): " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
+            // }
 
+            if (odomSource == "external")
+            {
+                ROS_ERROR("external");
+            }
             myfile.close();
             if (!useBestOdom)
             {
@@ -1378,6 +1448,9 @@ public:
             // if(isDegenerate){
             //     odomSource = "external";
             // }
+            if(isDegenerate){
+                std::cout << "Is degenerate: " << isDegenerate << std::endl;
+            }
 
             if (odomSource == "lidar")
             {
@@ -1385,12 +1458,13 @@ public:
                 // std::cout << "Using Lidar odometry" << std::endl;
                 ROS_INFO_THROTTLE(10, "Using Lidar odometry");
                 lastPose = lastPose * ICPincrement; // ICPincrement;
-                std::cout << "Is degenerate: " << isDegenerate << std::endl;
             }
             else if (odomSource == "external")
             {
                 // ROS_DEBUG("Using External odometry");
                 isDegenerate = true;
+
+                // std::cout << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
                 ROS_INFO_THROTTLE(0.5, "Using External odometry");
                 externalOdomUsed = true;
                 // std::cout << "Using External odometry" << std::endl;
