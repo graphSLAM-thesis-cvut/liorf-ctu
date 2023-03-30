@@ -164,6 +164,7 @@ public:
     float thTranslationSwitch; // which translational difference with IMU would be an indication to switch. possibl difference from 0 to sqrt(2)
     double rosbagStart; // 
     int maxIMUgraphLen; // 
+    bool useOnlyIsDegenerate;
     
 
     ParamServer()
@@ -276,6 +277,7 @@ public:
         nh.param<float>("liorf/thTranslationSwitch", thTranslationSwitch, 0.05); 
         nh.param<double>("liorf/rosbagStart", rosbagStart, double(1678964096.007040)); 
         nh.param<int>("liorf/maxIMUgraphLen", maxIMUgraphLen, 100);
+        nh.param<bool>("liorf/useOnlyIsDegenerate", useOnlyIsDegenerate, false); 
 
         usleep(100);
     }

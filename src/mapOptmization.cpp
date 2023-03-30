@@ -171,6 +171,29 @@ public:
     bool gotExternalOdomIncrement = false;
     bool externalOdomUsed = false;
     int corruptedKeyframesCount = 0;
+    vector<double> proportions;
+
+    double findMedian(vector<double> a)
+    {
+        int n = a.size();
+        if (n % 2 == 0)
+        {
+            nth_element(a.begin(),
+                        a.begin() + n / 2,
+                        a.end());
+            nth_element(a.begin(),
+                        a.begin() + (n - 1) / 2,
+                        a.end());
+            return (double)(a[(n - 1) / 2] + a[n / 2]) / 2.0;
+        }
+        else
+        {
+            nth_element(a.begin(),
+                        a.begin() + n / 2,
+                        a.end());
+            return (double)a[n / 2];
+        }
+    }
 
     GeographicLib::LocalCartesian gps_trans_;
 
@@ -1270,7 +1293,8 @@ public:
         return std::min(norm1, norm2);
     }
 
-    float approximateYaw(Eigen::Quaternionf &q){
+    float approximateYaw(Eigen::Quaternionf &q)
+    {
         // std::cout << "q: " << q.coeffs() << std::endl;
         Eigen::Vector3f forward;
         forward << 1, 0, 0;
@@ -1280,7 +1304,7 @@ public:
         // std::cout << "forward: " << forward << std::endl;
         // std::cout << "forwardProjected: " << forwardProjected << std::endl;
 
-        float dot = forward.transpose()*forwardProjected;
+        float dot = forward.transpose() * forwardProjected;
         // std::cout << "Dot: " << dot << std::endl;
         float yaw = std::acos(dot);
         return yaw;
@@ -1288,10 +1312,11 @@ public:
 
     float pi = 3.14159265358;
 
-    float wrapAngle(float angle){
+    float wrapAngle(float angle)
+    {
         float angleModified = angle + pi;
-        float wrappedModified = angleModified - std::floor(angleModified/(2*pi))*2*pi ;
-        float wrapped = wrappedModified - pi ;
+        float wrappedModified = angleModified - std::floor(angleModified / (2 * pi)) * 2 * pi;
+        float wrapped = wrappedModified - pi;
         return wrapped;
     }
 
@@ -1301,13 +1326,14 @@ public:
         float yaw2 = approximateYaw(q2);
         std::cout << "1: " << yaw1 << " 2: " << yaw2 << std::endl;
         float diffUnwraped = yaw1 - yaw2;
-        float diff=wrapAngle(diffUnwraped);
+        float diff = wrapAngle(diffUnwraped);
 
         // std::cout << "diff: " << diff << std::endl;
         return std::fabs(diff);
     }
 
-    float quatToAngle(Eigen::Quaternionf &q){
+    float quatToAngle(Eigen::Quaternionf &q)
+    {
         Eigen::Quaternionf identity(1, 0, 0, 0);
         return angleDist(identity, q);
     }
@@ -1315,8 +1341,9 @@ public:
     float angleDist(Eigen::Quaternionf &q1, Eigen::Quaternionf &q2)
     {
         float angleDiff = std::fabs(q1.angularDistance(q2));
-        if (angleDiff > pi){
-            angleDiff = 2*pi - angleDiff;
+        if (angleDiff > pi)
+        {
+            angleDiff = 2 * pi - angleDiff;
         }
         return angleDiff;
     }
@@ -1350,14 +1377,21 @@ public:
             Eigen::Affine3f transOrig = incrementalOdometryAffineFront;
 
             // IMU increment
+            double scale = 1;
             Eigen::Affine3f IMUincrement = transIncre;
+            if (proportions.size())
+            {
+                scale = findMedian(proportions);
+            }
+
+            std::cout << "Scale: " << scale << std::endl;
 
             // External Increment
             Eigen::Matrix3f rotExternal = externalOdometryIncrement.rotation().matrix().cast<float>(); // Extract rotation matrix and cast to float
             Eigen::Vector3f transExternal = externalOdometryIncrement.translation().cast<float>();     // Extract translation vector and cast to float
             Eigen::Affine3f externalIncrement = Eigen::Affine3f::Identity();                           // Initialize transformation matrix to identity
             externalIncrement.linear() = rotExternal;                                                  // Set rotation matrix
-            externalIncrement.translation() = transExternal;                                           // Set translation vector
+            externalIncrement.translation() = transExternal * scale;                                   // Set translation vector
 
             // ICP Increment
             Eigen::Affine3f ICPresult = trans2Affine3f(transformTobeMapped);
@@ -1401,46 +1435,27 @@ public:
                 startTime = time;
             }
             time -= startTime;
-            myfile << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
+            myfile << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << " " << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzExternal.norm() << " " << quatToAngle(quatIMU) << std::endl;
 
+            myfile.close();
             std::string odomSource = defaultOdomSource;
-            // if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
-            // {
-            //     bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
-            //     bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
-            //     odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
-            //     // myfile << time + 0.00000001 << " " << 0.3 << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
-            //     std::cout << odomSource << std::endl;
-            //     if (odomSource == "external")
-            //     {
-            //         ROS_ERROR("external");
-            //     }
-            //     // bool lidarBetter = (distanceRotICP < distanceRotExternal) && (distanceTranslationICP < distanceTranslationExternal);
-            //     // odomSource = lidarBetter ? "lidar" : "external";
-            //     // odomSource = "external";
-            // }
-            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ((distanceRotICP > thRotationSwitch))  )
+            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
             {
-                bool externalRotBetter = (distanceRotExternal/distanceRotICP < 0.9) && distanceRotExternal < thRotationSwitch;
-                // bool externalTransAdequate = distanceTranslationExternal/distanceTranslationICP < 1.6;
-                odomSource = (externalRotBetter ) ? "external" : "lidar";
+                bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
+                bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
+                odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
+                std::cout << odomSource << std::endl;
             }
-            // if ((!std::isnan(distanceTranslationICP)) && (!std::isnan(distanceTranslationExternal)) && ((distanceTranslationICP > thTranslationSwitch)) && odomSource == "lidar")
-            // {
-            //     bool externalTrBetter = distanceTranslationExternal/distanceTranslationICP < 0.9;
-            //     bool externalRotAdequate = distanceRotExternal/distanceRotICP < 1.2;
-            //     odomSource = distanceTranslationExternal < thTranslationSwitch ? "external" : "lidar";   
-            // }
-            // if(isDegenerate && odomSource == "lidar"){
-                
-            std::cout << time + startTime - rosbagStart << "diff: ICP(r,t): " << distanceRotICP << " " << distanceTranslationICP << " EXT(r,t): " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
-            // }
+            if (useOnlyIsDegenerate)
+            {
+                odomSource = isDegenerate ? "external" : "lidar";
+            }
 
+            std::cout << time + startTime - rosbagStart << "diff: ICP(r,t): " << distanceRotICP << " " << distanceTranslationICP << " EXT(r,t): " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
             if (odomSource == "external")
             {
                 ROS_ERROR("external");
             }
-            myfile.close();
             if (!useBestOdom)
             {
                 odomSource = defaultOdomSource;
@@ -1448,7 +1463,8 @@ public:
             // if(isDegenerate){
             //     odomSource = "external";
             // }
-            if(isDegenerate){
+            if (isDegenerate)
+            {
                 std::cout << "Is degenerate: " << isDegenerate << std::endl;
             }
 
@@ -1494,6 +1510,16 @@ public:
                 thisPose3D.intensity = (odomSource == "external");
                 cloudExternalUsage->push_back(thisPose3D);
                 publishCloud(pubExternalUsage, cloudExternalUsage, ros::Time::now(), odometryFrame);
+            }
+            else if((dxyzExternal.norm() > 0.05) && (!isDegenerate))
+            {
+                if(dxyzICP.norm() / transExternal.norm() < 3){
+                    proportions.push_back(dxyzICP.norm() / transExternal.norm());
+                }
+                if (proportions.size() > 100)
+                {
+                    proportions.erase(proportions.begin());
+                }
             }
             transformUpdate();
         }
@@ -2010,6 +2036,25 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "liorf");
 
     myfile.open("errors.txt", std::ifstream::out | std::ifstream::trunc);
+    myfile << "ts"
+           << " "
+           << "dwICP"
+           << " "
+           << "dxICP"
+           << " "
+           << "dwExt"
+           << " "
+           << "dxExt"
+           << " "
+           << "isDeg"
+           << " "
+           << "xIMU"
+           << " "
+           << "xICP"
+           << " "
+           << "xExt"
+           << " "
+           << "wIMU" << std::endl;
     myfile.close();
 
     mapOptimization MO;
