@@ -81,6 +81,7 @@ public:
     ros::Publisher pubCloudRegisteredRaw;
     ros::Publisher pubLoopConstraintEdge;
     ros::Publisher pubExternalUsage;
+    ros::Publisher pubExternalUsageTime;
 
     ros::Publisher pubSLAMInfo;
     ros::Publisher pubGpsOdom;
@@ -223,6 +224,7 @@ public:
         pubIcpKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("liorf/mapping/icp_loop_closure_corrected_cloud", 1);
         pubLoopConstraintEdge = nh.advertise<visualization_msgs::MarkerArray>("/liorf/mapping/loop_closure_constraints", 1);
         pubExternalUsage = nh.advertise<sensor_msgs::PointCloud2>("liorf/mapping/external_usage", 1);
+        pubExternalUsageTime = nh.advertise<visualization_msgs::Marker>("liorf/mapping/external_usage_time", 1);
 
         pubRecentKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("liorf/mapping/map_local", 1);
         pubRecentKeyFrame = nh.advertise<sensor_msgs::PointCloud2>("liorf/mapping/cloud_registered", 1);
@@ -1435,11 +1437,9 @@ public:
                 startTime = time;
             }
             time -= startTime;
-            myfile << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << " " << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzExternal.norm() << " " << quatToAngle(quatIMU) << std::endl;
-
-            myfile.close();
+            
             std::string odomSource = defaultOdomSource;
-            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
+            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || (isDegenerate && !notUseIsDegenerate)))
             {
                 bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
                 bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
@@ -1501,6 +1501,10 @@ public:
             // std::copy(rpyxyzLast.data(), rpyxyzLast.data() + rpyxyzLast.size(), std::begin(transformTobeMapped));
             pcl::getTranslationAndEulerAngles(lastPose, transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5],
                                               transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]);
+            myfile << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << " " 
+                << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzExternal.norm() 
+                << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatExternal) << " " << (odomSource == "lidar") << std::endl;
+            myfile.close();
             if (odomSource == "external")
             {
                 PointType thisPose3D;
@@ -1510,8 +1514,9 @@ public:
                 thisPose3D.intensity = (odomSource == "external");
                 cloudExternalUsage->push_back(thisPose3D);
                 publishCloud(pubExternalUsage, cloudExternalUsage, ros::Time::now(), odometryFrame);
+                publishTime(transformTobeMapped, time + startTime - rosbagStart );
             }
-            else if((dxyzExternal.norm() > 0.05) && (!isDegenerate))
+            else if((dxyzExternal.norm() > 0.05) && (!isDegenerate) && adjustExternalScale)
             {
                 if(dxyzICP.norm() / transExternal.norm() < 3){
                     proportions.push_back(dxyzICP.norm() / transExternal.norm());
@@ -1527,6 +1532,32 @@ public:
         {
             ROS_WARN("Not enough features! Only %d planar features available.", laserCloudSurfLastDSNum);
         }
+    }
+
+    void publishTime(float* transform, double time){
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "map";
+        marker.header.stamp = ros::Time();
+        marker.ns = "text";
+        marker.text = std::to_string(time);
+        static int id_marker=0;
+        marker.id = id_marker;
+        marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.position.x = transform[3];
+        marker.pose.position.y = transform[4];
+        marker.pose.position.z = transform[5]+0.5;
+        marker.color.a = 1.0; // Don't forget to set the alpha!
+        marker.color.r = 1.0;
+        marker.color.g = 1.0;
+        marker.color.b = 1.0;
+
+        marker.scale.x = 1.0;
+        marker.scale.y = 1.0;
+        marker.scale.z = 1.0;
+        //only if using a MESH_RESOURCE marker type:
+        pubExternalUsageTime.publish( marker );
+        id_marker++;
     }
 
     void transformUpdate()
@@ -2054,7 +2085,14 @@ int main(int argc, char **argv)
            << " "
            << "xExt"
            << " "
-           << "wIMU" << std::endl;
+           << "wICP"
+           << " "
+           << "wIMU" 
+           << " " 
+           << "wExt" 
+           << " " 
+           << "isLidar"
+           << std::endl;
     myfile.close();
 
     mapOptimization MO;
