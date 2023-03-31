@@ -1439,13 +1439,21 @@ public:
             
             std::string odomSource = defaultOdomSource;
             std::string alternativeSource = defaultOdomSource;
-            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || (isDegenerate && useIsDegenerate)))
+
+            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ((distanceRotICP > thRotationSwitch) || (isDegenerate && useIsDegenerate)))
             {
-                bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
-                bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
+                bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1);
+                bool ICPnotWorse = (distanceTranslationICP / distanceTranslationExternal < 1.3);
                 odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
-                std::cout << odomSource << std::endl;
             }
+            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ((distanceRotICP > thRotationSwitch) || (isDegenerate && useIsDegenerate)))
+            {
+                bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1);
+                bool ICPnotWorse = (distanceTranslationICP / distanceTranslationExternal < 1.3);
+                odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
+            }
+            std::cout << odomSource << std::endl;
+
             if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
             {
                 bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
