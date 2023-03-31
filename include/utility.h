@@ -166,7 +166,7 @@ public:
     int maxIMUgraphLen; // 
     bool useOnlyIsDegenerate;
     bool adjustExternalScale;
-    bool notUseIsDegenerate;
+    bool useIsDegenerate;
     
 
     ParamServer()
@@ -281,7 +281,7 @@ public:
         nh.param<int>("liorf/maxIMUgraphLen", maxIMUgraphLen, 100);
         nh.param<bool>("liorf/useOnlyIsDegenerate", useOnlyIsDegenerate, false); 
         nh.param<bool>("liorf/adjustExternalScale", adjustExternalScale, false);  
-        nh.param<bool>("liorf/notUseIsDegenerate", notUseIsDegenerate, false);
+        nh.param<bool>("liorf/useIsDegenerate", useIsDegenerate, true);
 
 
         usleep(100);

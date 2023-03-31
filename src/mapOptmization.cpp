@@ -1352,6 +1352,8 @@ public:
 
     void scan2MapOptimization()
     {
+        static int n_external = 0;
+        static int n_lidar = 0;
         if (cloudKeyPoses3D->points.empty())
             return;
 
@@ -1386,6 +1388,7 @@ public:
                 scale = findMedian(proportions);
             }
 
+            std::cout << "=======================" << std::endl;
             std::cout << "Scale: " << scale << std::endl;
 
             // External Increment
@@ -1421,10 +1424,6 @@ public:
             float distanceRotExternal = angleDist(quatIMU, quatExternal);
             float distanceTranslationICP = (dxyzICP - dxyzIMU).norm();
             float distanceTranslationExternal = (dxyzExternal - dxyzIMU).norm();
-            // std::cout << "Rot difference ICP     : " << distanceRotICP << std::endl;
-            // std::cout << "Rot difference External: " << distanceRotExternal << std::endl;
-            // std::cout << "Trans difference ICP     : " << distanceTranslationICP << std::endl;
-            // std::cout << "Trans difference External: " << distanceTranslationExternal << std::endl;
 
             static double startTime = 0;
 
@@ -1439,16 +1438,24 @@ public:
             time -= startTime;
             
             std::string odomSource = defaultOdomSource;
-            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || (isDegenerate && !notUseIsDegenerate)))
+            std::string alternativeSource = defaultOdomSource;
+            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || (isDegenerate && useIsDegenerate)))
             {
                 bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
                 bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
                 odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
                 std::cout << odomSource << std::endl;
             }
+            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
+            {
+                bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
+                bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
+                alternativeSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
+                // std::cout << odomSource << std::endl;
+            }
             if (useOnlyIsDegenerate)
             {
-                odomSource = isDegenerate ? "external" : "lidar";
+                odomSource = (isDegenerate ? "external" : "lidar");
             }
 
             std::cout << time + startTime - rosbagStart << "diff: ICP(r,t): " << distanceRotICP << " " << distanceTranslationICP << " EXT(r,t): " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
@@ -1460,9 +1467,7 @@ public:
             {
                 odomSource = defaultOdomSource;
             }
-            // if(isDegenerate){
-            //     odomSource = "external";
-            // }
+            
             if (isDegenerate)
             {
                 std::cout << "Is degenerate: " << isDegenerate << std::endl;
@@ -1470,21 +1475,21 @@ public:
 
             if (odomSource == "lidar")
             {
-                // ROS_DEBUG("Using Lidar odometry");
-                // std::cout << "Using Lidar odometry" << std::endl;
                 ROS_INFO_THROTTLE(10, "Using Lidar odometry");
                 lastPose = lastPose * ICPincrement; // ICPincrement;
+                n_lidar++;
+                if (n_lidar>4){
+                    n_external=0;
+                }
             }
             else if (odomSource == "external")
             {
-                // ROS_DEBUG("Using External odometry");
                 isDegenerate = true;
-
-                // std::cout << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
                 ROS_INFO_THROTTLE(0.5, "Using External odometry");
                 externalOdomUsed = true;
-                // std::cout << "Using External odometry" << std::endl;
                 lastPose = lastPose * externalIncrement;
+                n_external++;
+                n_lidar=0;
             }
             else
             {
@@ -1498,13 +1503,19 @@ public:
             Eigen::VectorXf rpyxyzLast(6);
             rpyxyzLast << rpyLast, xyzLast;
 
-            // std::copy(rpyxyzLast.data(), rpyxyzLast.data() + rpyxyzLast.size(), std::begin(transformTobeMapped));
             pcl::getTranslationAndEulerAngles(lastPose, transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5],
                                               transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]);
+
+
             myfile << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << " " 
                 << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzExternal.norm() 
-                << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatExternal) << " " << (odomSource == "lidar") << std::endl;
+                << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatExternal) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
             myfile.close();
+            std::cout << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << " " 
+                << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzExternal.norm() 
+                << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatExternal) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
+            
+
             if (odomSource == "external")
             {
                 PointType thisPose3D;
@@ -1535,6 +1546,12 @@ public:
     }
 
     void publishTime(float* transform, double time){
+        static double lastTime = 0;
+        if (std::fabs(time - lastTime) < 1){
+            return;
+        }
+        lastTime = time;
+
         visualization_msgs::Marker marker;
         marker.header.frame_id = "map";
         marker.header.stamp = ros::Time();
@@ -2092,6 +2109,8 @@ int main(int argc, char **argv)
            << "wExt" 
            << " " 
            << "isLidar"
+           << " " 
+           << "isAltLidar"
            << std::endl;
     myfile.close();
 
