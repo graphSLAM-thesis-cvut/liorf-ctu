@@ -1710,7 +1710,7 @@ public:
             initialEstimate.insert(cloudKeyPoses3D->size(), poseToExt);
 
             // std::cout << "External between: " << poseBetweenExt.translation() << " " << poseBetweenExt.rotation().quaternion() << std::endl;
-            std::cout << "Difference: " << poseBetweenExt.between(poseBetween).translation() << " " << poseBetweenExt.between(poseBetween).rotation().quaternion() << std::endl;
+            std::cout << "Difference: " << poseBetweenExt.between(poseBetween).translation() << " " << poseBetweenExt.between(poseBetween).rotation().toQuaternion().coeffs()  << std::endl;
             // std::cout << "Difference: " << poseBetweenExt.between(poseBetween).translation() << " " << poseBetweenExt.between(poseBetween).rotation().quaternion() << std::endl;
         }
         else
