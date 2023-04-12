@@ -32,12 +32,14 @@ liorf:
 
   # Robustness setings
   defaultOdomSource: "lidar" # "lidar" or "external"
-  useBestOdom: true
+  useBestOdom: false
   thRotationSwitch: 0.025
   thTranslationSwitch: 0.1
   maxIMUgraphLen: 100
   useOnlyIsDegenerate: true
   useIsDegenerate: true
+  adjustExternalScale: false
+  scaleQueueSize: 500
 
 # /lio_sam/mapping/odometry
 

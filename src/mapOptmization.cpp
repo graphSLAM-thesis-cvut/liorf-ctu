@@ -16,6 +16,8 @@
 #include <gtsam/nonlinear/Values.h>
 #include <gtsam/inference/Symbol.h>
 
+#include <set>
+
 #include <message_filters/subscriber.h>
 #include <message_filters/cache.h>
 // #include <message_filters/time_synchronizer.h>
@@ -147,6 +149,8 @@ public:
 
     bool aLoopIsClosed = false;
     map<int, int> loopIndexContainer; // from new to old
+
+    set<int> degeneratedKeyframesSet;
     vector<pair<int, int>> loopIndexQueue;
     vector<gtsam::Pose3> loopPoseQueue;
     vector<gtsam::noiseModel::Diagonal::shared_ptr> loopNoiseQueue;
@@ -699,6 +703,9 @@ public:
     {
         int loopKeyCur = copy_cloudKeyPoses3D->size() - 1;
         int loopKeyPre = -1;
+        if (degeneratedKeyframesSet.count(loopKeyCur)){
+            return false;
+        }
 
         // check loop constraint added before
         auto it = loopIndexContainer.find(loopKeyCur);
@@ -721,7 +728,7 @@ public:
             }
         }
 
-        if (loopKeyPre == -1 || loopKeyCur == loopKeyPre)
+        if (loopKeyPre == -1 || loopKeyCur == loopKeyPre || degeneratedKeyframesSet.count(loopKeyPre))
             return false;
 
         *latestID = loopKeyCur;
@@ -1381,7 +1388,7 @@ public:
             Eigen::Affine3f transOrig = incrementalOdometryAffineFront;
 
             // IMU increment
-            double scale = 1;
+            double scale = defaultAdditionalScale;
             Eigen::Affine3f IMUincrement = transIncre;
             if (proportions.size())
             {
@@ -1540,7 +1547,7 @@ public:
                 if(dxyzICP.norm() / transExternal.norm() < 3){
                     proportions.push_back(dxyzICP.norm() / transExternal.norm());
                 }
-                if (proportions.size() > 100)
+                if (proportions.size() > scaleQueueSize)
                 {
                     proportions.erase(proportions.begin());
                 }
@@ -1672,7 +1679,9 @@ public:
                 noiseVector = noiseVector * 10;
                 corruptedKeyframesCount = 1;
                 externalOdomUsed = false;
-
+                degeneratedKeyframesSet.insert(cloudKeyPoses3D->size() - 1);
+                degeneratedKeyframesSet.insert(cloudKeyPoses3D->size() - 2);
+                degeneratedKeyframesSet.insert(cloudKeyPoses3D->size());
                 ROS_INFO("Using External odometry (node)");
             }
 

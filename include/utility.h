@@ -165,7 +165,11 @@ public:
     double rosbagStart; // 
     int maxIMUgraphLen; // 
     bool useOnlyIsDegenerate;
+
     bool adjustExternalScale;
+    int scaleQueueSize;
+    float defaultAdditionalScale;
+
     bool useIsDegenerate;
     
 
@@ -280,8 +284,11 @@ public:
         nh.param<double>("liorf/rosbagStart", rosbagStart, double(1678964096.007040)); 
         nh.param<int>("liorf/maxIMUgraphLen", maxIMUgraphLen, 100);
         nh.param<bool>("liorf/useOnlyIsDegenerate", useOnlyIsDegenerate, false); 
-        nh.param<bool>("liorf/adjustExternalScale", adjustExternalScale, false);  
+        nh.param<bool>("liorf/adjustExternalScale", adjustExternalScale, false); 
+        nh.param<int>("liorf/scaleQueueSize", scaleQueueSize, 500); 
         nh.param<bool>("liorf/useIsDegenerate", useIsDegenerate, true);
+        nh.param<float>("liorf/defaultAdditionalScale", defaultAdditionalScale, 1.0);
+        
 
 
         usleep(100);
