@@ -1,10 +1,6 @@
 # New feature
 - Accept pointcloud without "ring" field. A ring (row) is calculated from the order of the point, matricies shape
 - Add an external odometer factor;
-to launch liorf by iteself, run:
-```
-roslaunch liorf run_ctu.launch
-```
 
 # liorf
 ## New Feature
