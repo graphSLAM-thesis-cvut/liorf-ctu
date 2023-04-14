@@ -30,6 +30,10 @@
 #include <eigen_conversions/eigen_msg.h>
 #include <algorithm>
 
+#include <geometry_msgs/Quaternion.h>
+#include <tf2/convert.h>
+#include <tf2/LinearMath/Quaternion.h>
+
 using namespace gtsam;
 
 using symbol_shorthand::B; // Bias  (ax,ay,az,gx,gy,gz)
@@ -168,6 +172,9 @@ public:
     gtsam::Pose3 externalOdometryIncrement;
 
     gtsam::Pose3 lastSavedExternalOdometry;
+    ros::Time last_topic2_time;
+    std::deque<nav_msgs::Odometry::ConstPtr> messages_from_topic2;
+
 
     // gtsam::Pose3 External2lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
     // gtsam::Pose3 lidar2External = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
@@ -218,7 +225,7 @@ public:
         subCloud = nh.subscribe<liorf::cloud_info>("liorf/deskew/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
         subGPS = nh.subscribe<sensor_msgs::NavSatFix>(gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
         subLoop = nh.subscribe<std_msgs::Float64MultiArray>("lio_loop/loop_closure_detection", 1, &mapOptimization::loopInfoHandler, this, ros::TransportHints().tcpNoDelay());
-        subExternalOdom = nh.subscribe<nav_msgs::Odometry>("/odom_in", 10, &mapOptimization::ExternalOdomHandler, this, ros::TransportHints().tcpNoDelay());
+        subExternalOdom = nh.subscribe<nav_msgs::Odometry>("/odom_in", 1000, &mapOptimization::ExternalOdomHandler, this, ros::TransportHints().tcpNoDelay());
         // subExternalOdom = new message_filters::Subscriber<nav_msgs::Odometry>(nh, "external_odom", 10);
         cacheExternalOdom = new message_filters::Cache<nav_msgs::Odometry>(100);
 
@@ -284,8 +291,105 @@ public:
         matP = cv::Mat(6, 6, CV_32F, cv::Scalar::all(0));
     }
 
+
+    nav_msgs::Odometry interpolate_odometry(const nav_msgs::Odometry& msg1, const nav_msgs::Odometry& msg2, const ros::Time& t)
+    {
+    // Compute the time difference between the two messages
+    const ros::Duration dt = msg2.header.stamp - msg1.header.stamp;
+    
+    // If the time difference is zero, return msg1 (or msg2, they should be equivalent)
+    if (dt.isZero())
+    {
+        return msg1;
+    }
+    
+    // Compute the interpolation factor between msg1 and msg2
+    const double factor = (t - msg1.header.stamp).toSec() / dt.toSec();
+    
+    // Interpolate the position using linear interpolation
+    geometry_msgs::Point pos;
+    pos.x = msg1.pose.pose.position.x + factor * (msg2.pose.pose.position.x - msg1.pose.pose.position.x);
+    pos.y = msg1.pose.pose.position.y + factor * (msg2.pose.pose.position.y - msg1.pose.pose.position.y);
+    pos.z = msg1.pose.pose.position.z + factor * (msg2.pose.pose.position.z - msg1.pose.pose.position.z);
+
+    // Interpolate the orientation using spherical linear interpolation (slerp)
+    geometry_msgs::Quaternion quat;
+    tf2::Quaternion q1, q2;
+    // tf2::fromMsg(msg1.pose.pose.orientation, q1);
+    q1.setValue(msg1.pose.pose.orientation.x, msg1.pose.pose.orientation.y, msg1.pose.pose.orientation.z, msg1.pose.pose.orientation.w);
+    // tf2::fromMsg(msg2.pose.pose.orientation, q2);
+
+    q2.setValue(msg2.pose.pose.orientation.x, msg2.pose.pose.orientation.y, msg2.pose.pose.orientation.z, msg2.pose.pose.orientation.w);
+    tf2::Quaternion q = q1.slerp(q2, factor); 
+    // quat = tf2::toMsg(q);
+    quat.x = q.x();
+    quat.y = q.y();
+    quat.z = q.z();
+    quat.w = q.w();
+
+    // Create a new odometry message with the interpolated pose and header
+    nav_msgs::Odometry interp_odom;
+    interp_odom.header.stamp = t;
+    interp_odom.header.frame_id = msg1.header.frame_id;
+    interp_odom.child_frame_id = msg1.child_frame_id;
+    interp_odom.pose.pose.position = pos;
+    interp_odom.pose.pose.orientation = quat;
+    interp_odom.twist = msg1.twist; // Copy the twist from msg1 (or msg2)
+    
+    return interp_odom;
+    }
+
     void laserCloudInfoHandler(const liorf::cloud_infoConstPtr &msgIn)
     {
+        while (msgIn->header.stamp - last_topic2_time > ros::Duration(0)) {
+            ros::Duration(0.01).sleep();
+            ros::spinOnce();
+            ROS_ERROR_THROTTLE(2, "Waiting for the additional oometry to arrive. Last arrived timestamp: %lf. laserscan timestamp: %lf", last_topic2_time.toSec(), msgIn->header.stamp.toSec());
+        }
+
+        double futureThreshld = 0.5;
+        if (last_topic2_time - msgIn->header.stamp > ros::Duration(futureThreshld)) {
+            ROS_ERROR_THROTTLE(2, "Skipping the frame as additional odometry is more then %lf seconds in the future", futureThreshld);
+            return;
+        }
+
+        nav_msgs::Odometry::ConstPtr prev_msg;
+        nav_msgs::Odometry::ConstPtr msg_a;
+        for (const auto& msg2 : messages_from_topic2) {
+            if (msg2->header.stamp > msgIn->header.stamp) {
+                msg_a = msg2;
+                break;
+            }
+            prev_msg = msg2;
+        }
+        if (!msg_a){
+            std::cout << "msg_a is null!" << std::endl;
+        }
+
+        if (prev_msg){
+            for (auto it = messages_from_topic2.begin(); it != messages_from_topic2.end(); ) {
+                if ((*it)->header.stamp == prev_msg->header.stamp) {
+                    std::cout << "Found previous message, stop erasing!" << std::endl;
+                    // Found prev_msg, stop the loop
+                    break;
+                }
+                // Erase the message
+                it = messages_from_topic2.erase(it);
+            }
+        } else {
+            return;
+        }
+        
+
+        std::cout << "here" << std::endl;
+        if (prev_msg){
+            std::cout << "Additional after:" << msg_a->header.stamp.toSec() << " Before: " << prev_msg->header.stamp.toSec() << " My:" << msgIn->header.stamp.toSec() << std::endl;
+        } else {
+            std::cout << "Additional after:" << msg_a->header.stamp.toSec() << " My:" << msgIn->header.stamp.toSec() << "   Before is null!" << std::endl;
+        }
+        
+
+        
         // extract time stamp
         timeLaserInfoStamp = msgIn->header.stamp;
         timeLaserInfoCur = msgIn->header.stamp.toSec();
@@ -307,9 +411,11 @@ public:
         {
             timeLastProcessing = timeLaserInfoCur;
 
-            auto lastExternalOdometryMsg = cacheExternalOdom->getElemBeforeTime(timeLaserInfoStamp);
+            auto lastExternalOdometryMsg = interpolate_odometry(*prev_msg, *msg_a, timeLaserInfoStamp);
 
-            SyncExternalOdomHandler(lastExternalOdometryMsg);
+            boost::shared_ptr<nav_msgs::Odometry> odom_ptr = boost::make_shared<nav_msgs::Odometry>(lastExternalOdometryMsg);
+
+            SyncExternalOdomHandler(boost::const_pointer_cast<const nav_msgs::Odometry>(odom_ptr) );
 
             updateInitialGuess();
 
@@ -553,6 +659,9 @@ public:
 
     void ExternalOdomHandler(const nav_msgs::OdometryConstPtr &odomMsg)
     {
+        last_topic2_time = odomMsg->header.stamp;
+        messages_from_topic2.push_back(odomMsg);
+        ROS_INFO_THROTTLE(2, "last time arrived is %lf", last_topic2_time.toSec());
         cacheExternalOdom->add(odomMsg);
     }
 
