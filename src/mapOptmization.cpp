@@ -175,6 +175,8 @@ public:
     ros::Time last_topic2_time;
     std::deque<nav_msgs::Odometry::ConstPtr> messages_from_topic2;
 
+    ros::CallbackQueue additional_queue;
+
 
     // gtsam::Pose3 External2lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
     // gtsam::Pose3 lidar2External = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
@@ -222,10 +224,9 @@ public:
         pubLaserOdometryIncremental = nh.advertise<nav_msgs::Odometry>("liorf/mapping/odometry_incremental", 1);
         pubPath = nh.advertise<nav_msgs::Path>("liorf/mapping/path", 1);
 
-        subCloud = nh.subscribe<liorf::cloud_info>("liorf/deskew/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
+        subCloud = nh.subscribe<liorf::cloud_info>("liorf/deskew/cloud_info", 10, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
         subGPS = nh.subscribe<sensor_msgs::NavSatFix>(gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
         subLoop = nh.subscribe<std_msgs::Float64MultiArray>("lio_loop/loop_closure_detection", 1, &mapOptimization::loopInfoHandler, this, ros::TransportHints().tcpNoDelay());
-        subExternalOdom = nh.subscribe<nav_msgs::Odometry>("/odom_in", 1000, &mapOptimization::ExternalOdomHandler, this, ros::TransportHints().tcpNoDelay());
         // subExternalOdom = new message_filters::Subscriber<nav_msgs::Odometry>(nh, "external_odom", 10);
         cacheExternalOdom = new message_filters::Cache<nav_msgs::Odometry>(100);
 
@@ -251,6 +252,12 @@ public:
         auto odometer2LidarRot = gtsam::Rot3(odometerRot);
         auto odometer2LidarTrans = gtsam::Point3(odometerTrans);
         odometer2Lidar = gtsam::Pose3(odometer2LidarRot, odometer2LidarTrans);
+
+        
+        ros::NodeHandle nh2;
+        nh2.setCallbackQueue(&additional_queue);
+        subExternalOdom = nh2.subscribe<nav_msgs::Odometry>("/odom_in", 1000, &mapOptimization::ExternalOdomHandler, this);
+        // additional_queue.addCallback()
 
         allocateMemory();
     }
@@ -341,9 +348,11 @@ public:
 
     void laserCloudInfoHandler(const liorf::cloud_infoConstPtr &msgIn)
     {
+        ros::Time currentTime = ros::Time::now(); // TODO: stop looking for additional odometry if it doesn't arrive in some time. An continue looking for it if it suddenly arrives
         while (msgIn->header.stamp - last_topic2_time > ros::Duration(0)) {
+            additional_queue.callAvailable();
             ros::Duration(0.01).sleep();
-            ros::spinOnce();
+            // ros::spinOnce();
             ROS_ERROR_THROTTLE(2, "Waiting for the additional oometry to arrive. Last arrived timestamp: %lf. laserscan timestamp: %lf", last_topic2_time.toSec(), msgIn->header.stamp.toSec());
         }
 
@@ -2246,6 +2255,11 @@ int main(int argc, char **argv)
 
     std::thread loopthread(&mapOptimization::loopClosureThread, &MO);
     std::thread visualizeMapThread(&mapOptimization::visualizeGlobalMapThread, &MO);
+
+    // ros::SingleThreadedSpinner single_spinner(); // 1 thread
+    // single_spinner.addSubscriber(&mapOptimization::ExternalOdomHandler); // Only add sub2 to the spinner
+    // single_spinner.spin();
+    
 
     ros::spin();
 
