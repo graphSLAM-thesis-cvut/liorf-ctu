@@ -1,18 +1,14 @@
 <launch>
+    <!-- RUN WITH AN EXTERNAL ODOMETRY /osom_wheels -->
 
     <!-- <arg name="project" default="lio_sam"/> -->
-    
-    
-    <!-- <include file="$(find thesis)/launch/baselink_to_map.launch" /> -->
-
-    <!-- Parameters -->
 
 
-    <rosparam file="$(find liorf)/config/params_husky_ctu.yaml" command="load" />
+    <rosparam file="$(find liorf)/config/liosam/run_ctu.yaml" command="load" />
     <group>
-        <!-- <remap from="/tf" to="/tf_dev_null1" /> -->
+        <remap from="/tf" to="/tf_dev_null1" />
 
-        <remap from="/odom_in" to="/camera/odom/sample"/>
+        <remap from="/odom_in" to="/odom_wheels"/>
 
         <!--- LOAM -->
         <include file="$(find liorf)/launch/include/module_loam.launch" />

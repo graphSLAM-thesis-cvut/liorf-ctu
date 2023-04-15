@@ -8,6 +8,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -pthread")
 
 find_package(catkin REQUIRED COMPONENTS
   tf
+  tf2
+  tf2_geometry_msgs
   roscpp
   rospy
   cv_bridge
@@ -56,6 +58,8 @@ catkin_package(
   DEPENDS PCL GTSAM
 
   CATKIN_DEPENDS
+  tf2
+  tf2_geometry_msgs
   std_msgs
   nav_msgs
   geometry_msgs
