@@ -1503,6 +1503,12 @@ public:
         return angleDiff;
     }
 
+    double mahalanobisDistance(double rotDiff, double transDiff){
+        Eigen::Vector2d rotTransDiff(std::log(rotDiff), std::log(transDiff));
+        auto static invCov = errorModelCov.inverse();
+        return (rotTransDiff - errorModelMean).transpose() *  invCov * (rotTransDiff - errorModelMean);
+    }
+
     void scan2MapOptimization()
     {
         static int n_external = 0;
@@ -1593,37 +1599,46 @@ public:
             std::string odomSource = defaultOdomSource;
             std::string alternativeSource = defaultOdomSource;
 
-            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ((distanceRotICP > thRotationSwitch) || (isDegenerate && useIsDegenerate)))
+
+            // auto invCov = errorModelCov.inverse();
+            double md = mahalanobisDistance(distanceRotICP, distanceTranslationICP);
+            double mdAdditional = mahalanobisDistance(distanceRotExternal, distanceTranslationExternal);
+            bool mdCritereum = md > errorModelTh;
+
+            std::cout << "md Lidar:" << md << ", md Additional: " << mdAdditional << std::endl; 
+
+
+            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (mdCritereum || (isDegenerate && useIsDegenerate)))
             {
-                bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1);
-                bool ICPnotWorse = (distanceTranslationICP / distanceTranslationExternal < 1.3);
-                odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
+                // bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1);
+                // bool ICPnotWorse = (distanceTranslationICP / distanceTranslationExternal < 1.3);
+                odomSource = (md < mdAdditional) ? "lidar" : "external";
             }
-            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && ((distanceRotICP > thRotationSwitch) || (isDegenerate && useIsDegenerate)))
-            {
-                bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1);
-                bool ICPnotWorse = (distanceTranslationICP / distanceTranslationExternal < 1.3);
-                odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
-            }
+            // if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (mdCritereum || (isDegenerate && useIsDegenerate)))
+            // {
+            //     // bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1);
+            //     // bool ICPnotWorse = (distanceTranslationICP / distanceTranslationExternal < 1.3);
+            //     odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
+            // }
             std::cout << odomSource << std::endl;
 
-            if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
-            {
-                bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
-                bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
-                alternativeSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
-                // std::cout << odomSource << std::endl;
-            }
+            // if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotExternal)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
+            // {
+            //     bool ICPbetterOR = (distanceRotICP / distanceRotExternal < 1.1) || (distanceTranslationICP / distanceTranslationExternal < 1.1);
+            //     bool ICPnotWorse = (distanceRotICP / distanceRotExternal < 1.3) && (distanceTranslationICP / distanceTranslationExternal < 1.3);
+            //     alternativeSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "external";
+            //     // std::cout << odomSource << std::endl;
+            // }
             if (useOnlyIsDegenerate)
             {
                 odomSource = (isDegenerate ? "external" : "lidar");
             }
 
             std::cout << time + startTime - rosbagStart << "diff: ICP(r,t): " << distanceRotICP << " " << distanceTranslationICP << " EXT(r,t): " << distanceRotExternal << " " << distanceTranslationExternal << std::endl;
-            if (odomSource == "external")
-            {
-                ROS_ERROR("external");
-            }
+            // if (odomSource == "external")
+            // {
+            //     ROS_ERROR("external");
+            // }
 
             if (!useBestOdom || !gotExternalOdomIncrement)
             {
@@ -1673,9 +1688,9 @@ public:
                 << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzExternal.norm() 
                 << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatExternal) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
             myfile.close();
-            std::cout << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << " " 
-                << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzExternal.norm() 
-                << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatExternal) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
+            // std::cout << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotExternal << " " << distanceTranslationExternal << " " 
+            //     << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzExternal.norm() 
+            //     << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatExternal) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
             
 
             if (odomSource == "external")

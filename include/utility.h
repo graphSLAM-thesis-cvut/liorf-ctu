@@ -118,6 +118,14 @@ public:
     vector<double> extTransV;
     vector<double> odometerTransV;
     vector<double> odometerRotV;
+
+    vector<double> errorModelCovV;
+    vector<double> errorModelMeanV;
+    double errorModelTh;
+
+    Eigen::Matrix2d errorModelCov;
+    Eigen::Vector2d errorModelMean;
+
     Eigen::Matrix3d extRot;
     Eigen::Matrix3d extRPY;
     Eigen::Vector3d extTrans;
@@ -288,7 +296,14 @@ public:
         nh.param<int>("liorf/scaleQueueSize", scaleQueueSize, 500); 
         nh.param<bool>("liorf/useIsDegenerate", useIsDegenerate, true);
         nh.param<float>("liorf/defaultAdditionalScale", defaultAdditionalScale, 1.0);
-        
+
+
+        nh.param<vector<double>>("liorf/errorModelCov", errorModelCovV, vector<double>({1.23, 0.42, 0.42, 0.69}));
+        nh.param<vector<double>>("liorf/errorModelMean", errorModelMeanV, vector<double>({-6.22, -4.32}));
+        nh.param<double>("liorf/errorModelTh", errorModelTh, 3.11);
+
+        errorModelCov = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(errorModelCovV.data(), 2, 2);
+        errorModelMean = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(errorModelMeanV.data(), 2, 1);
 
 
         usleep(100);
