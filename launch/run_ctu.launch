@@ -1,24 +1,19 @@
 <launch>
-    <!-- RUN WITH AN EXTERNAL ODOMETRY /osom_wheels -->
 
-    <!-- <arg name="project" default="lio_sam"/> -->
+    <arg name="project" default="liorf"/>
+    
+    <!-- Parameters -->
+    <rosparam file="$(find liorf)/config/params_husky_ctu.yaml" command="load" />
 
+    <!--- LOAM -->
+    <include file="$(find liorf)/launch/include/module_loam.launch" />
 
-    <rosparam file="$(find liorf)/config/liosam/run_ctu.yaml" command="load" />
-    <group>
-        <remap from="/tf" to="/tf_dev_null1" />
+    <!--- Robot State TF -->
+    <!-- <include file="$(find liorf)/launch/include/module_robot_state_publisher.launch" /> -->
 
-        <remap from="/odom_in" to="/odom_wheels"/>
+    <!--- Run Navsat -->
+    <!-- <include file="$(find liorf)/launch/include/module_navsat.launch" /> -->
 
-        <!--- LOAM -->
-        <include file="$(find liorf)/launch/include/module_loam.launch" />
-
-        <!--- Robot State TF -->
-        <!-- <include file="$(find liorf)/launch/include/module_robot_state_publisher.launch" /> -->
-
-        <!--- Run Navsat -->
-        <include file="$(find liorf)/launch/include/module_navsat.launch" />
-    </group>
     <!--- Run Rviz-->
     <include file="$(find liorf)/launch/include/module_rviz.launch" />
 

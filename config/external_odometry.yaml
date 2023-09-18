@@ -50,7 +50,7 @@ liorf:
                 -0.71, -0.71, 0,
                 0, 0, -1]
 
-  # Extrinsics: (odometer_link -> lidar). Important in case using an external odometry /odom_in
+  # Extrinsics: (odometer_link -> lidar). Important in case using an additional odometry /odom_additional
   odometerTrans: [-0.010, -0.010, 0.542]
   odometerRot: [0.000, 0.000, 0.383, 0.924] # quaternions
 

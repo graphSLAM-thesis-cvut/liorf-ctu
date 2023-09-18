@@ -1,6 +1,6 @@
 # New feature
 - Accept pointcloud without "ring" field. A ring (row) is calculated from the order of the point, matricies shape
-- Add an external odometer factor;
+- Add an additional odometer factor;
 
 # liorf
 ## New Feature

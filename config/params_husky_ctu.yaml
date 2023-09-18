@@ -1,57 +1,23 @@
 liorf:
 
   # Topics
-  pointCloudTopic: "/cropbox/output"               # Point cloud data
-  imuTopic: "/imu/data"                         # IMU data
-  odomTopic: "odometry/imu"                   # IMU pre-preintegration odometry, same frequency as IMU
+  ## Input
+  pointCloudTopic: "/points"                  # Point cloud data
+  imuTopic: "/imu/data"                       # IMU data
   gpsTopic: "odometry/gpsz"                   # GPS odometry topic from navsat, see module_navsat.launch file
+  additionalOdomTopic: "/odom_wheels"         # Additional odometry topic, if you have one
+  ## Output
+  odomTopic: "odometry/imu"                   # IMU pre-preintegration odometry, same frequency as IMU
 
-  # Frames
+
+  # Frames. Used for output only
   lidarFrame: "os_sensor"
-  baselinkFrame: "os_sensor"
-  odometryFrame: "map"
-  mapFrame: "map1"
+  baselinkFrame: "os_sensor"                  
+  odometryFrame: "odom"
+  mapFrame: "map"
 
-  # GPS Settings
-  useImuHeadingInitialization: false           # if using GPS data, set to "true"
-  useGpsElevation: false                      # if GPS elevation is bad, set to "false"
-  gpsCovThreshold: 2.0                        # m^2, threshold for using GPS data
-  poseCovThreshold: 25.0                      # m^2, threshold for using GPS data
-  
-  # Export settings
-  savePCD: false                              # https://github.com/TixiaoShan/LIO-SAM/issues/3
-  savePCDDirectory: "/Downloads/LOAM/"        # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
-
-  # Sensor Settings
-  sensor: "ouster"                              # lidar sensor type, 'velodyne' or 'ouster' or 'livox'
-  N_SCAN: 128                                  # number of lidar channel (i.e., Velodyne/Ouster: 16, 32, 64, 128, Livox Horizon: 6)
-  Horizon_SCAN: 1024                          # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
-  downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1
-  lidarMinRange: 1.0                          # default: 1.0, minimum lidar range to be used
-  lidarMaxRange: 1000.0                       # default: 1000.0, maximum lidar range to be used
-
-  # Robustness setings
-  defaultOdomSource: "lidar" # "lidar" or "external"
-  useBestOdom: false
-  thRotationSwitch: 0.025
-  thTranslationSwitch: 0.1
-  maxIMUgraphLen: 100
-  useOnlyIsDegenerate: true
-  useIsDegenerate: true
-  adjustExternalScale: false
-  scaleQueueSize: 500
-
-# /lio_sam/mapping/odometry
-
-  # IMU Settings
-  imuAccNoise: 3.9939570888238808e-03
-  imuGyrNoise: 1.5636343949698187e-03
-  imuAccBiasN: 6.4356659353532566e-05
-  imuGyrBiasN: 3.5640318696367613e-05
-  imuGravity: 9.80511
-  imuRPYWeight: 0.01
-
-  # Extrinsics: T_lb (lidar -> imu)
+  # Transformations between the sensors
+  ## T_lb (lidar -> imu)
   extrinsicTrans: [0.000, 0.000, -0.280]
 
   extrinsicRot: [0.71, -0.71, 0,
@@ -61,15 +27,63 @@ liorf:
                 -0.71, -0.71, 0,
                 0, 0, -1]
 
-  # Extrinsics: (odometer_link -> lidar)
+  ## T_ol (odometer_link -> lidar)
   odometerTrans: [-0.108, -0.045, 0.070]
   odometerRot: [0.000, 0.000, 0.383, 0.924] # quaternions
+
+  # Robustness setings. This is Seva's addition configuration
+  useBestOdom: false         # if true, use the best odom source, otherwise use the default
+  defaultOdomSource: "lidar" # "lidar" or "additional" - just keep it LiDAR =)
+  thRotationSwitch: 0.025    # if the rotation diff (Odometry_IMU - Odometry_LiDAR) is bigger than this value, switch to the best odom source
+  thTranslationSwitch: 0.1   # if the translation diff (Odometry_IMU - Odometry_LiDAR) is bigger than this value, switch to the best odom source
+  maxIMUgraphLen: 100        # max number of IMU measurement nodes in the graph
+  ## Development parameters. Do not change
+  useOnlyIsDegenerate: false  # if true, does NOT use IMU-based Indicator of Degeneracy
+  useIsDegenerate: true       # if true, additionally uses LiDAR-based Indicator of Degeneracy
+  adjustAdditionalOdomScale: true   # if true, adjusts the scale of the additional odometry while LiDAR odometry works well
+  scaleQueueSize: 500         # size of the queue for the scale adjustment
+
+  # IMU Settings
+  imuAccNoise: 3.9939570888238808e-03
+  imuGyrNoise: 1.5636343949698187e-03
+  imuAccBiasN: 6.4356659353532566e-05
+  imuGyrBiasN: 3.5640318696367613e-05
+  imuGravity: 9.80511
+  imuRPYWeight: 0.01
+
+  # Sensor Settings
+  sensor: "ouster"                            # lidar sensor type, 'velodyne' or 'ouster' or 'livox'
+  N_SCAN: 128                                 # number of lidar channel (i.e., Velodyne/Ouster: 16, 32, 64, 128, Livox Horizon: 6)
+  Horizon_SCAN: 1024                          # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
+  downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1
+  lidarMinRange: 1.0                          # default: 1.0, minimum lidar range to be used
+  lidarMaxRange: 1000.0                       # default: 1000.0, maximum lidar range to be used
 
   # LOAM feature threshold
   edgeThreshold: 1.0
   surfThreshold: 0.1
   edgeFeatureMinValidNum: 10
   surfFeatureMinValidNum: 100
+
+  # Loop closure
+  loopClosureEnableFlag: false
+  loopClosureFrequency: 1.0                     # Hz, regulate loop closure constraint add frequency
+  surroundingKeyframeSize: 50                   # submap size (when loop closure enabled)
+  historyKeyframeSearchRadius: 15.0             # meters, key frame that is within n meters from current pose will be considerd for loop closure
+  historyKeyframeSearchTimeDiff: 30.0           # seconds, key frame that is n seconds older will be considered for loop closure
+  historyKeyframeSearchNum: 25                  # number of hostory key frames will be fused into a submap for loop closure
+  historyKeyframeFitnessScore: 0.3              # icp threshold, the smaller the better alignment
+
+
+  # GPS Settings
+  useImuHeadingInitialization: false          # if using GPS data, set to "true"
+  useGpsElevation: false                      # if GPS elevation is bad, set to "false"
+  gpsCovThreshold: 2.0                        # m^2, threshold for using GPS data
+  poseCovThreshold: 25.0                      # m^2, threshold for using GPS data
+  
+  # Export settings
+  savePCD: false                              # https://github.com/TixiaoShan/LIO-SAM/issues/3
+  savePCDDirectory: "/Downloads/LOAM/"        # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
 
   # voxel filter paprams
   odometrySurfLeafSize: 0.4                     # default: 0.4 - outdoor, 0.2 - indoor
@@ -81,8 +95,8 @@ liorf:
   rotation_tollerance: 1000                     # radians
 
   # CPU Params
-  numberOfCores: 16                              # number of cores for mapping optimization
-  mappingProcessInterval: 0.1                  # seconds, regulate mapping frequency
+  numberOfCores: 16                             # number of cores for mapping optimization
+  mappingProcessInterval: 0.1                   # seconds, regulate mapping frequency
 
   # Surrounding map
   surroundingkeyframeAddingDistThreshold: 1.0   # meters, regulate keyframe adding threshold
@@ -90,22 +104,13 @@ liorf:
   surroundingKeyframeDensity: 2.0               # meters, downsample surrounding keyframe poses   
   surroundingKeyframeSearchRadius: 50.0         # meters, within n meters scan-to-map optimization (when loop closure disabled)
 
-  # Loop closure
-  loopClosureEnableFlag: false
-  loopClosureFrequency: 1.0                     # Hz, regulate loop closure constraint add frequency
-  surroundingKeyframeSize: 50                   # submap size (when loop closure enabled)
-  historyKeyframeSearchRadius: 15.0             # meters, key frame that is within n meters from current pose will be considerd for loop closure
-  historyKeyframeSearchTimeDiff: 30.0           # seconds, key frame that is n seconds older will be considered for loop closure
-  historyKeyframeSearchNum: 25                  # number of hostory key frames will be fused into a submap for loop closure
-  historyKeyframeFitnessScore: 0.3              # icp threshold, the smaller the better alignment
-
   # Visualization
   globalMapVisualizationSearchRadius: 1000.0    # meters, global map visualization radius
   globalMapVisualizationPoseDensity: 10.0       # meters, global map visualization keyframe density
   globalMapVisualizationLeafSize: 1.0           # meters, global map visualization cloud density
 
 
-
+### Next part is outdates and obsolete I guess. I will remove it later. ###
 
 # Navsat (convert GPS coordinates to Cartesian)
 navsat:
