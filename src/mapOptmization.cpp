@@ -398,7 +398,7 @@ public:
                 }
                 prev_msg = msg2;
             }
-            if (!msg_a)
+            if ((!msg_a) && debug)
             {
                 std::cout << "msg_a is null!" << std::endl;
             }
@@ -409,7 +409,10 @@ public:
                 {
                     if ((*it)->header.stamp == prev_msg->header.stamp)
                     {
-                        std::cout << "Found previous message, stop erasing!" << std::endl;
+                        if (debug)
+                        {
+                            std::cout << "Found previous message, stop erasing!" << std::endl;
+                        }
                         // Found prev_msg, stop the loop
                         break;
                     }
@@ -421,8 +424,9 @@ public:
             {
                 return;
             }
-
-            std::cout << "here" << std::endl;
+        }
+        if (debug)
+        {
             if (prev_msg)
             {
                 std::cout << "Additional after:" << msg_a->header.stamp.toSec() << " Before: " << prev_msg->header.stamp.toSec() << " My:" << msgIn->header.stamp.toSec() << std::endl;
@@ -476,7 +480,8 @@ public:
         }
     }
 
-    void gpsHandler(const sensor_msgs::NavSatFixConstPtr &gpsMsg)
+    void
+    gpsHandler(const sensor_msgs::NavSatFixConstPtr &gpsMsg)
     {
         if (gpsMsg->status.status != 0)
             return;
@@ -1486,7 +1491,6 @@ public:
     {
         float yaw1 = approximateYaw(q1);
         float yaw2 = approximateYaw(q2);
-        std::cout << "1: " << yaw1 << " 2: " << yaw2 << std::endl;
         float diffUnwraped = yaw1 - yaw2;
         float diff = wrapAngle(diffUnwraped);
 
@@ -1548,8 +1552,11 @@ public:
                 scale = findMedian(proportions);
             }
 
-            std::cout << "=======================" << std::endl;
-            std::cout << "Scale: " << scale << std::endl;
+            if (debug)
+            {
+                std::cout << "=======================" << std::endl;
+                std::cout << "Scale: " << scale << std::endl;
+            }
 
             // Additional Increment
             Eigen::Matrix3f rotAdditional = additionalOdometryIncrement.rotation().matrix().cast<float>(); // Extract rotation matrix and cast to float
@@ -1568,15 +1575,24 @@ public:
 
             Eigen::Quaternionf quatICP(ICPincrement.linear());
             Eigen::Vector3f dxyzICP = ICPincrement.translation();
-            std::cout << std::fixed;
-            std::cout << std::setprecision(4);
-            std::cout << "ICP     : t: " << dxyzICP(0) << " " << dxyzICP(1) << " " << dxyzICP(2) << " q: " << quatToAngle(quatICP) << std::endl;
+            if (debug)
+            {
+                std::cout << std::fixed;
+                std::cout << std::setprecision(4);
+                std::cout << "ICP     : t: " << dxyzICP(0) << " " << dxyzICP(1) << " " << dxyzICP(2) << " q: " << quatToAngle(quatICP) << std::endl;
+            }
             Eigen::Quaternionf quatIMU(IMUincrement.linear());
             Eigen::Vector3f dxyzIMU = IMUincrement.translation();
-            std::cout << "IMU     : t: " << dxyzIMU(0) << " " << dxyzIMU(1) << " " << dxyzIMU(2) << " q: " << quatToAngle(quatIMU) << std::endl;
+            if (debug)
+            {
+                std::cout << "IMU     : t: " << dxyzIMU(0) << " " << dxyzIMU(1) << " " << dxyzIMU(2) << " q: " << quatToAngle(quatIMU) << std::endl;
+            }
             Eigen::Quaternionf quatAdditional(additionalIncrement.linear());
             Eigen::Vector3f dxyzAdditional = additionalIncrement.translation();
-            std::cout << "Additional: t: " << dxyzAdditional(0) << " " << dxyzAdditional(1) << " " << dxyzAdditional(2) << " q: " << quatToAngle(quatAdditional) << " " << std::endl;
+            if (debug)
+            {
+                std::cout << "Additional: t: " << dxyzAdditional(0) << " " << dxyzAdditional(1) << " " << dxyzAdditional(2) << " q: " << quatToAngle(quatAdditional) << std::endl;
+            }
 
             Eigen::Affine3f lastPose = transOrig;
 
@@ -1612,7 +1628,10 @@ public:
                 bool ICPnotWorse = (distanceTranslationICP / distanceTranslationAdditional < 1.3);
                 odomSource = (ICPbetterOR && ICPnotWorse) ? "lidar" : "additional";
             }
-            std::cout << odomSource << std::endl;
+            if (debug)
+            {
+                std::cout << odomSource << std::endl;
+            }
 
             if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotAdditional)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
             {
@@ -1626,7 +1645,10 @@ public:
                 odomSource = (isDegenerate ? "additional" : "lidar");
             }
 
-            std::cout << time + startTime - rosbagStart << "diff: ICP(r,t): " << distanceRotICP << " " << distanceTranslationICP << " EXT(r,t): " << distanceRotAdditional << " " << distanceTranslationAdditional << std::endl;
+            if (debug)
+            {
+                std::cout << time + startTime - rosbagStart << "diff: ICP(r,t): " << distanceRotICP << " " << distanceTranslationICP << " EXT(r,t): " << distanceRotAdditional << " " << distanceTranslationAdditional << std::endl;
+            }
             if (odomSource == "additional")
             {
                 ROS_ERROR("additional");
@@ -1637,7 +1659,7 @@ public:
                 odomSource = defaultOdomSource;
             }
 
-            if (isDegenerate)
+            if (isDegenerate && debug)
             {
                 std::cout << "Is degenerate: " << isDegenerate << std::endl;
             }
@@ -1680,9 +1702,12 @@ public:
                    << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzAdditional.norm()
                    << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatAdditional) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
             myfile.close();
-            std::cout << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotAdditional << " " << distanceTranslationAdditional << " "
-                      << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzAdditional.norm()
-                      << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatAdditional) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
+            if (debug)
+            {
+                std::cout << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotAdditional << " " << distanceTranslationAdditional << " "
+                          << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzAdditional.norm()
+                          << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatAdditional) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
+            }
 
             if (odomSource == "additional")
             {
@@ -1875,7 +1900,14 @@ public:
             initialEstimate.insert(cloudKeyPoses3D->size(), poseToAdditional);
 
             // std::cout << "Additional between: " << poseBetweenAdditional.translation() << " " << poseBetweenAdditional.rotation().quaternion() << std::endl;
-            std::cout << "Difference: " << poseBetweenAdditional.between(poseBetween).translation() << " " << poseBetweenAdditional.between(poseBetween).rotation().toQuaternion().coeffs() << std::endl;
+            if (poseBetweenAdditional.between(poseBetween).translation().norm() > 0.1)
+            {
+                ROS_WARN("Additional odometry drift: %f", poseBetweenAdditional.between(poseBetween).translation().norm());
+            }
+            if (debug)
+            {
+                std::cout << "Difference: " << poseBetweenAdditional.between(poseBetween).translation() << " " << poseBetweenAdditional.between(poseBetween).rotation().toQuaternion().coeffs() << std::endl;
+            }
             // std::cout << "Difference: " << poseBetweenAdditional.between(poseBetween).translation() << " " << poseBetweenAdditional.between(poseBetween).rotation().quaternion() << std::endl;
         }
         else

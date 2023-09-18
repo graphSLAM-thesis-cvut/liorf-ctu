@@ -79,6 +79,8 @@ public:
 
     std::string robot_id;
 
+    bool debug;
+
     // Topics
     string pointCloudTopic;
     string imuTopic;
@@ -184,6 +186,8 @@ public:
     {
         nh.param<std::string>("/robot_id", robot_id, "roboat");
 
+        nh.param<bool>("liorf/debug", debug, false);
+        
         nh.param<std::string>("liorf/pointCloudTopic", pointCloudTopic, "points_raw");
         nh.param<std::string>("liorf/imuTopic", imuTopic, "imu_correct");
         nh.param<std::string>("liorf/odomTopic", odomTopic, "odometry/imu");
