@@ -2,6 +2,22 @@
 - Accept pointcloud without "ring" field. A ring (row) is calculated from the order of the point, matricies shape
 - Add an additional odometer factor;
 
+# CTU usage:
+- Run SLAM with Ouster IMU:
+```
+roslaunch liorf run_ctu_ouster.launch
+```
+- Run SLAM with 9-axis IMU (old setup):
+```
+roslaunch liorf run_ctu.launch
+```
+- Run a separate Ouster:
+```
+roslaunch liorf run_lio_sam_ouster.launch
+
+```
+- If the transformation between IMU and LiDAR has changed wrt the previous setup, adjust the transformation in the parameter file.
+
 # liorf
 ## New Feature
 ------------------- Update Date: 2022-11-20 -------------------
