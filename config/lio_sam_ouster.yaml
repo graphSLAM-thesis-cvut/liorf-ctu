@@ -4,6 +4,9 @@ liorf:
   ## Input
   imuTopic: "/ouster/imu"  
   pointCloudTopic: "/ouster/points"               # Point cloud data
+  # pointCloudTopic: "/points"                  # Point cloud data
+  # imuTopic: "/os_cloud_node/imu"                         # IMU data
+
   gpsTopic: "odometry/gpsz"                   # GPS odometry topic from navsat, see module_navsat.launch file
   ## Output
   odomTopic: "odometry/imu"                   # IMU pre-preintegration odometry, same frequency as IMU

@@ -400,7 +400,7 @@ public:
             }
             if ((!msg_a) && debug)
             {
-                std::cout << "msg_a is null!" << std::endl;
+                // std::cout << "msg_a is null!" << std::endl;
             }
 
             if (prev_msg)
@@ -411,7 +411,7 @@ public:
                     {
                         if (debug)
                         {
-                            std::cout << "Found previous message, stop erasing!" << std::endl;
+                            // std::cout << "Found previous message, stop erasing!" << std::endl;
                         }
                         // Found prev_msg, stop the loop
                         break;
@@ -429,11 +429,11 @@ public:
         {
             if (prev_msg)
             {
-                std::cout << "Additional after:" << msg_a->header.stamp.toSec() << " Before: " << prev_msg->header.stamp.toSec() << " My:" << msgIn->header.stamp.toSec() << std::endl;
+                // std::cout << "Additional after:" << msg_a->header.stamp.toSec() << " Before: " << prev_msg->header.stamp.toSec() << " My:" << msgIn->header.stamp.toSec() << std::endl;
             }
             else
             {
-                std::cout << "Additional after:" << msg_a->header.stamp.toSec() << " My:" << msgIn->header.stamp.toSec() << "   Before is null!" << std::endl;
+                // std::cout << "Additional after:" << msg_a->header.stamp.toSec() << " My:" << msgIn->header.stamp.toSec() << "   Before is null!" << std::endl;
             }
         }
 
@@ -1554,8 +1554,8 @@ public:
 
             if (debug)
             {
-                std::cout << "=======================" << std::endl;
-                std::cout << "Scale: " << scale << std::endl;
+                // std::cout << "=======================" << std::endl;
+                // std::cout << "Scale: " << scale << std::endl;
             }
 
             // Additional Increment
@@ -1577,21 +1577,21 @@ public:
             Eigen::Vector3f dxyzICP = ICPincrement.translation();
             if (debug)
             {
-                std::cout << std::fixed;
-                std::cout << std::setprecision(4);
-                std::cout << "ICP     : t: " << dxyzICP(0) << " " << dxyzICP(1) << " " << dxyzICP(2) << " q: " << quatToAngle(quatICP) << std::endl;
+                // std::cout << std::fixed;
+                // std::cout << std::setprecision(4);
+                // std::cout << "ICP     : t: " << dxyzICP(0) << " " << dxyzICP(1) << " " << dxyzICP(2) << " q: " << quatToAngle(quatICP) << std::endl;
             }
             Eigen::Quaternionf quatIMU(IMUincrement.linear());
             Eigen::Vector3f dxyzIMU = IMUincrement.translation();
             if (debug)
             {
-                std::cout << "IMU     : t: " << dxyzIMU(0) << " " << dxyzIMU(1) << " " << dxyzIMU(2) << " q: " << quatToAngle(quatIMU) << std::endl;
+                // std::cout << "IMU     : t: " << dxyzIMU(0) << " " << dxyzIMU(1) << " " << dxyzIMU(2) << " q: " << quatToAngle(quatIMU) << std::endl;
             }
             Eigen::Quaternionf quatAdditional(additionalIncrement.linear());
             Eigen::Vector3f dxyzAdditional = additionalIncrement.translation();
             if (debug)
             {
-                std::cout << "Additional: t: " << dxyzAdditional(0) << " " << dxyzAdditional(1) << " " << dxyzAdditional(2) << " q: " << quatToAngle(quatAdditional) << std::endl;
+                // std::cout << "Additional: t: " << dxyzAdditional(0) << " " << dxyzAdditional(1) << " " << dxyzAdditional(2) << " q: " << quatToAngle(quatAdditional) << std::endl;
             }
 
             Eigen::Affine3f lastPose = transOrig;
@@ -1630,7 +1630,7 @@ public:
             }
             if (debug)
             {
-                std::cout << odomSource << std::endl;
+                // std::cout << odomSource << std::endl;
             }
 
             if ((!std::isnan(distanceRotICP)) && (!std::isnan(distanceRotAdditional)) && (distanceRotICP > thRotationSwitch || distanceTranslationICP > thTranslationSwitch || isDegenerate))
@@ -1647,7 +1647,7 @@ public:
 
             if (debug)
             {
-                std::cout << time + startTime - rosbagStart << "diff: ICP(r,t): " << distanceRotICP << " " << distanceTranslationICP << " EXT(r,t): " << distanceRotAdditional << " " << distanceTranslationAdditional << std::endl;
+                // std::cout << time + startTime - rosbagStart << "diff: ICP(r,t): " << distanceRotICP << " " << distanceTranslationICP << " EXT(r,t): " << distanceRotAdditional << " " << distanceTranslationAdditional << std::endl;
             }
             if (odomSource == "additional")
             {
@@ -1661,7 +1661,7 @@ public:
 
             if (isDegenerate && debug)
             {
-                std::cout << "Is degenerate: " << isDegenerate << std::endl;
+                // std::cout << "Is degenerate: " << isDegenerate << std::endl;
             }
 
             if (odomSource == "lidar")
@@ -1704,9 +1704,9 @@ public:
             myfile.close();
             if (debug)
             {
-                std::cout << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotAdditional << " " << distanceTranslationAdditional << " "
-                          << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzAdditional.norm()
-                          << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatAdditional) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
+                // std::cout << time + startTime - rosbagStart << " " << distanceRotICP << " " << distanceTranslationICP << " " << distanceRotAdditional << " " << distanceTranslationAdditional << " "
+                //           << isDegenerate << " " << dxyzIMU.norm() << " " << dxyzICP.norm() << " " << dxyzAdditional.norm()
+                //           << " " << quatToAngle(quatICP) << " " << quatToAngle(quatIMU) << " " << quatToAngle(quatAdditional) << " " << (odomSource == "lidar") << " " << (alternativeSource == "lidar") << std::endl;
             }
 
             if (odomSource == "additional")
@@ -1906,7 +1906,7 @@ public:
             }
             if (debug)
             {
-                std::cout << "Difference: " << poseBetweenAdditional.between(poseBetween).translation() << " " << poseBetweenAdditional.between(poseBetween).rotation().toQuaternion().coeffs() << std::endl;
+                // std::cout << "Difference: " << poseBetweenAdditional.between(poseBetween).translation() << " " << poseBetweenAdditional.between(poseBetween).rotation().toQuaternion().coeffs() << std::endl;
             }
             // std::cout << "Difference: " << poseBetweenAdditional.between(poseBetween).translation() << " " << poseBetweenAdditional.between(poseBetween).rotation().quaternion() << std::endl;
         }

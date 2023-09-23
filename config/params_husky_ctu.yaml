@@ -1,8 +1,8 @@
 liorf:
-  debug: false
+  debug: true
   # Topics
   ## Input
-  pointCloudTopic: "/points"                  # Point cloud data
+  pointCloudTopic: "/ouster/points"                  # Point cloud data
   imuTopic: "/imu/data"                       # IMU data
   gpsTopic: "odometry/gpsz"                   # GPS odometry topic from navsat, see module_navsat.launch file
   additionalOdomTopic: "/odom_wheels"         # Additional odometry topic, if you have one
@@ -18,14 +18,22 @@ liorf:
 
   # Transformations between the sensors
   ## T_lb (lidar -> imu)
-  extrinsicTrans: [0.000, 0.000, -0.280]
+  # extrinsicTrans: [0.000, 0.000, -0.280]
 
-  extrinsicRot: [0.71, -0.71, 0,
-                -0.71, -0.71, 0,
-                0, 0, -1]
-  extrinsicRPY: [0.71, -0.71, 0,
-                -0.71, -0.71, 0,
-                0, 0, -1]
+  # extrinsicRot: [0.71, -0.71, 0,
+  #               -0.71, -0.71, 0,
+  #               0, 0, -1]
+  # extrinsicRPY: [0.71, -0.71, 0,
+  #               -0.71, -0.71, 0,
+  #               0, 0, -1]
+  extrinsicTrans: [0.000, 0.000, -0.2]
+
+  extrinsicRot: [1, 0, 0,
+                 0, 1, 0,
+                 0, 0, 1]
+  extrinsicRPY: [1, 0, 0,
+                 0, 1, 0,
+                 0, 0, 1]
 
   ## T_ol (odometer_link -> lidar)
   odometerTrans: [-0.108, -0.045, 0.070]
