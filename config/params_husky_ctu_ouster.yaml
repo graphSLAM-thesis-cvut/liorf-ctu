@@ -1,3 +1,4 @@
+##### partams FOR INDOOR, for outdoor change :voxel filter paprams" to 0.4; 0.2; 0.4;
 liorf:
   # General
   useImu: true                                # Use IMU data
@@ -7,8 +8,8 @@ liorf:
 
   # Topics
   ## Input topics
-  pointCloudTopic: "/points"                  # Point cloud data
-  imuTopic: "/os_cloud_node/imu"                         # IMU data
+  pointCloudTopic: "/ouster/points"                  # Point cloud data
+  imuTopic: "/ouster/imu"                         # IMU data
   additionalOdomTopic: "/odom_wheels"         # Additional odometry topic, if you have one
   gpsTopic: "odometry/gpsz"                   # GPS odometry topic from navsat, see module_navsat.launch file
   ## Output topics
@@ -66,9 +67,9 @@ liorf:
   imuRPYWeight: 0.01
 
     # voxel filter paprams
-  odometrySurfLeafSize: 0.4                     # default: 0.4 - outdoor, 0.2 - indoor
-  mappingCornerLeafSize: 0.2                    # default: 0.2 - outdoor, 0.1 - indoor
-  mappingSurfLeafSize: 0.4                      # default: 0.4 - outdoor, 0.2 - indoor
+  odometrySurfLeafSize: 0.2                     # default: 0.4 - outdoor, 0.2 - indoor
+  mappingCornerLeafSize: 0.1                    # default: 0.2 - outdoor, 0.1 - indoor
+  mappingSurfLeafSize: 0.2                      # default: 0.4 - outdoor, 0.2 - indoor
 
   # LOAM feature threshold
   edgeThreshold: 1.0
