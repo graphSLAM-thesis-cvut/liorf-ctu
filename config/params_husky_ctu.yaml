@@ -1,6 +1,7 @@
 ##### partams FOR INDOOR, for outdoor change :voxel filter paprams" to 0.4; 0.2; 0.4;
 liorf:
   debug: true
+  useIMU: true
   # Topics
   ## Input
   pointCloudTopic: "/ouster/points"                  # Point cloud data

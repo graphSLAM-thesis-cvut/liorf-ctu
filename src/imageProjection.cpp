@@ -120,6 +120,8 @@ public:
         pubExtractedCloud = nh.advertise<sensor_msgs::PointCloud2> ("liorf/deskew/cloud_deskewed", 1);
         pubLaserCloudInfo = nh.advertise<liorf::cloud_info> ("liorf/deskew/cloud_info", 1);
 
+        ROS_INFO("useIMU: %d", useIMU);
+
         allocateMemory();
         resetParameters();
 
@@ -190,11 +192,15 @@ public:
 
     void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg)
     {
-        if (!cachePointCloud(laserCloudMsg))
+        if (!cachePointCloud(laserCloudMsg)){
+            ROS_INFO("Cloud not cached, aborting scan");
             return;
+        }
 
-        if (!deskewInfo())
+        if (!deskewInfo()){
+            ROS_INFO("Deskew info not available, aborting scan");
             return;
+        }
 
         projectPointCloud();
 
@@ -335,7 +341,7 @@ public:
         std::lock_guard<std::mutex> lock2(odoLock);
 
         // make sure IMU data available for the scan
-        if (imuQueue.empty() || imuQueue.front().header.stamp.toSec() > timeScanCur || imuQueue.back().header.stamp.toSec() < timeScanEnd)
+        if ( useIMU && (imuQueue.empty() || imuQueue.front().header.stamp.toSec() > timeScanCur || imuQueue.back().header.stamp.toSec() < timeScanEnd) )
         {
             ROS_DEBUG("Waiting for IMU data ...");
             return false;

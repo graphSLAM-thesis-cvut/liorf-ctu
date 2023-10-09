@@ -80,6 +80,7 @@ public:
     std::string robot_id;
 
     bool debug;
+    bool useIMU;
 
     // Topics
     string pointCloudTopic;
@@ -187,6 +188,7 @@ public:
         nh.param<std::string>("/robot_id", robot_id, "roboat");
 
         nh.param<bool>("liorf/debug", debug, false);
+        nh.param<bool>("liorf/useIMU", useIMU, true);
         
         nh.param<std::string>("liorf/pointCloudTopic", pointCloudTopic, "points_raw");
         nh.param<std::string>("liorf/imuTopic", imuTopic, "imu_correct");
