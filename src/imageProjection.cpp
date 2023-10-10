@@ -427,11 +427,15 @@ public:
                 break;
         }
 
-        if (odomQueue.empty())
+        if (odomQueue.empty()){
+            ROS_WARN_THROTTLE(10, "no odom");
             return;
+        } 
 
-        if (odomQueue.front().header.stamp.toSec() > timeScanCur)
+        if (odomQueue.front().header.stamp.toSec() > timeScanCur){
+            ROS_WARN_THROTTLE(10, "odom start time is ahead of scan time");
             return;
+        }
 
         // get start odometry at the beinning of the scan
         nav_msgs::Odometry startOdomMsg;
@@ -465,8 +469,10 @@ public:
         // get end odometry at the end of the scan
         odomDeskewFlag = false;
 
-        if (odomQueue.back().header.stamp.toSec() < timeScanEnd)
+        if (odomQueue.back().header.stamp.toSec() < timeScanEnd){
+            ROS_WARN_THROTTLE(10, "odom end time is behind of scan time");
             return;
+        }
 
         nav_msgs::Odometry endOdomMsg;
 

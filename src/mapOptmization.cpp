@@ -1057,7 +1057,16 @@ public:
         static Eigen::Affine3f lastImuPreTransformation;
         if (cloudInfo.odomAvailable == true)
         {
-            Eigen::Affine3f transBack = pcl::getTransformation(cloudInfo.initialGuessX, cloudInfo.initialGuessY, cloudInfo.initialGuessZ,
+            double initX = cloudInfo.initialGuessX;
+            double initY = cloudInfo.initialGuessY;
+            double initZ = cloudInfo.initialGuessZ;
+            if (!imuType)
+            {
+                initX = 0;
+                initY = 0;
+                initZ = 0;
+            }
+            Eigen::Affine3f transBack = pcl::getTransformation(initX, initY, initZ,
                                                                cloudInfo.initialGuessRoll, cloudInfo.initialGuessPitch, cloudInfo.initialGuessYaw);
             if (lastImuPreTransAvailable == false)
             {
